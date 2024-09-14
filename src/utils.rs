@@ -18,6 +18,14 @@ pub fn convert_bytes(bytes: i64) -> String {
         .unwrap_or(format!("{} B", bytes))
 }
 
+pub fn handle_ratio(ratio: f32) -> String {
+    if ratio == -1_f32 {
+        "None".to_string()
+    } else {
+        format!("{:.2}", ratio)
+    }
+}
+
 pub fn convert_status(status: TorrentStatus) -> String {
     match status {
         TorrentStatus::Stopped => "Stopped".to_string(),

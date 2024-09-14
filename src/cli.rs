@@ -24,11 +24,11 @@ pub struct Cli {
     #[arg(long, value_name = "PASSWORD")]
     pub password: Option<String>,
     /// Tick rate, i.e. number of ticks per second
-    #[arg(short, long, value_name = "FLOAT", default_value_t = 4.0)]
+    #[arg(short, long, value_name = "FLOAT", default_value_t = 2.0)]
     pub tick_rate: f64,
 
     /// Frame rate, i.e. number of frames per second
-    #[arg(short, long, value_name = "FLOAT", default_value_t = 30.0)]
+    #[arg(short, long, value_name = "FLOAT", default_value_t = 24.0)]
     pub frame_rate: f64,
 }
 

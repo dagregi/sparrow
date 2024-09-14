@@ -1,25 +1,29 @@
-use crate::utils::{convert_bytes, convert_eta, convert_percentage, convert_status};
-
 use color_eyre::Result;
 use crossterm::event::{KeyCode, KeyEvent};
 use futures::executor::block_on;
 use itertools::Itertools;
 use ratatui::{prelude::*, widgets::*};
-use style::palette::tailwind;
 use tokio::sync::mpsc::UnboundedSender;
 use transmission_rpc::TransClient;
 use unicode_width::UnicodeWidthStr;
 
 use super::Component;
-use crate::{action::Action, config::Config};
+use crate::{
+    action::Action,
+    colors::Colors,
+    config::Config,
+    utils::{convert_bytes, convert_eta, convert_percentage, convert_status, handle_ratio},
+};
+
+const ITEM_HEIGHT: usize = 4;
 
 pub struct Home {
     client: TransClient,
     state: TableState,
     items: Vec<Data>,
-    longest_item_lens: (u16, u16, u16, u16, u16, u16, u16, u16, u16),
-    colors: TableColors,
-    color_index: usize,
+    longest_item_lens: (u16, u16, u16, u16, u16, u16),
+    colors: Colors,
+    scroll_state: ScrollbarState,
     command_tx: Option<UnboundedSender<Action>>,
     config: Config,
 }
@@ -31,8 +35,8 @@ impl Home {
             client,
             state: TableState::default().with_selected(0),
             longest_item_lens: constraint_len_calculator(&data_vec),
-            colors: TableColors::new(&PALETTES[0]),
-            color_index: 0,
+            colors: Colors::new(),
+            scroll_state: ScrollbarState::new((data_vec.len()) * ITEM_HEIGHT),
             items: data_vec,
             command_tx: None,
             config: Config::default(),
@@ -51,6 +55,7 @@ impl Home {
             None => 0,
         };
         self.state.select(Some(i));
+        self.scroll_state = self.scroll_state.position(i * ITEM_HEIGHT);
     }
 
     pub fn previous(&mut self) {
@@ -65,19 +70,7 @@ impl Home {
             None => 0,
         };
         self.state.select(Some(i));
-    }
-
-    pub fn next_color(&mut self) {
-        self.color_index = (self.color_index + 1) % PALETTES.len();
-    }
-
-    pub fn previous_color(&mut self) {
-        let count = PALETTES.len();
-        self.color_index = (self.color_index + count - 1) % count;
-    }
-
-    pub fn set_colors(&mut self) {
-        self.colors = TableColors::new(&PALETTES[self.color_index]);
+        self.scroll_state = self.scroll_state.position(i * ITEM_HEIGHT);
     }
 }
 
@@ -90,14 +83,12 @@ impl Home {
             .add_modifier(Modifier::REVERSED)
             .fg(self.colors.selected_style_fg);
 
-        let header = [
-            "Name", "Done", "Size", "Have", "ETA", "Up", "Down", "Ratio", "Status",
-        ]
-        .into_iter()
-        .map(Cell::from)
-        .collect::<Row>()
-        .style(header_style)
-        .height(1);
+        let header = ["NAME", "DONE", "ETA", "UP", "DOWN", "RATIO"]
+            .into_iter()
+            .map(Cell::from)
+            .collect::<Row>()
+            .style(header_style)
+            .height(1);
         let rows = self.items.iter().enumerate().map(|(i, data)| {
             let color = match i % 2 {
                 0 => self.colors.normal_row_color,
@@ -114,16 +105,12 @@ impl Home {
         let t = Table::new(
             rows,
             [
-                // + 1 is for padding.
                 Constraint::Length(self.longest_item_lens.0 + 1),
                 Constraint::Min(self.longest_item_lens.1 + 1),
                 Constraint::Min(self.longest_item_lens.2 + 1),
                 Constraint::Min(self.longest_item_lens.3 + 1),
                 Constraint::Min(self.longest_item_lens.4 + 1),
-                Constraint::Min(self.longest_item_lens.5 + 1),
-                Constraint::Min(self.longest_item_lens.6 + 1),
-                Constraint::Min(self.longest_item_lens.7 + 1),
-                Constraint::Min(self.longest_item_lens.8),
+                Constraint::Min(self.longest_item_lens.5),
             ],
         )
         .header(header)
@@ -139,20 +126,18 @@ impl Home {
         frame.render_stateful_widget(t, area, &mut self.state);
     }
 
-    fn render_footer(&self, frame: &mut Frame, area: Rect) {
-        let info_footer = Paragraph::new(Line::from(INFO_TEXT))
-            .style(
-                Style::new()
-                    .fg(self.colors.row_fg)
-                    .bg(self.colors.buffer_bg),
-            )
-            .centered()
-            .block(
-                Block::bordered()
-                    .border_type(BorderType::Double)
-                    .border_style(Style::new().fg(self.colors.footer_border_color)),
-            );
-        frame.render_widget(info_footer, area);
+    fn render_scrollbar(&mut self, frame: &mut Frame, area: Rect) {
+        frame.render_stateful_widget(
+            Scrollbar::default()
+                .orientation(ScrollbarOrientation::VerticalRight)
+                .begin_symbol(None)
+                .end_symbol(None),
+            area.inner(Margin {
+                vertical: 1,
+                horizontal: 1,
+            }),
+            &mut self.scroll_state,
+        );
     }
 }
 impl Component for Home {
@@ -168,12 +153,6 @@ impl Component for Home {
 
     fn handle_key_event(&mut self, key_event: KeyEvent) -> Result<Option<Action>> {
         match key_event.code {
-            KeyCode::Right | KeyCode::Char('l') => {
-                self.next_color();
-            }
-            KeyCode::Left | KeyCode::Char('h') => {
-                self.previous_color();
-            }
             KeyCode::Char('j') | KeyCode::Down => {
                 self.next();
             }
@@ -201,73 +180,30 @@ impl Component for Home {
         let vertical = &Layout::vertical([Constraint::Min(5), Constraint::Length(3)]);
         let rects = vertical.split(area);
 
-        self.set_colors();
-
         self.render_table(frame, rects[0]);
-        self.render_footer(frame, rects[1]);
+        self.render_scrollbar(frame, rects[0]);
         Ok(())
-    }
-}
-
-const PALETTES: [tailwind::Palette; 4] = [
-    tailwind::BLUE,
-    tailwind::EMERALD,
-    tailwind::INDIGO,
-    tailwind::RED,
-];
-const INFO_TEXT: &str =
-    "(Esc) quit | (↑) move up | (↓) move down | (→) next color | (←) previous color";
-
-struct TableColors {
-    buffer_bg: Color,
-    header_bg: Color,
-    header_fg: Color,
-    row_fg: Color,
-    selected_style_fg: Color,
-    normal_row_color: Color,
-    alt_row_color: Color,
-    footer_border_color: Color,
-}
-
-impl TableColors {
-    const fn new(color: &tailwind::Palette) -> Self {
-        Self {
-            buffer_bg: tailwind::SLATE.c950,
-            header_bg: color.c900,
-            header_fg: tailwind::SLATE.c200,
-            row_fg: tailwind::SLATE.c200,
-            selected_style_fg: color.c400,
-            normal_row_color: tailwind::SLATE.c950,
-            alt_row_color: tailwind::SLATE.c900,
-            footer_border_color: color.c400,
-        }
     }
 }
 
 struct Data {
     name: String,
     done: String,
-    have: String,
     eta: String,
     up: String,
     down: String,
     ratio: String,
-    status: String,
-    size: String,
 }
 
 impl Data {
-    const fn ref_array(&self) -> [&String; 9] {
+    const fn ref_array(&self) -> [&String; 6] {
         [
             &self.name,
             &self.done,
-            &self.size,
-            &self.have,
             &self.eta,
             &self.up,
             &self.down,
             &self.ratio,
-            &self.status,
         ]
     }
 
@@ -276,9 +212,6 @@ impl Data {
     }
     fn done(&self) -> &str {
         &self.done
-    }
-    fn have(&self) -> &str {
-        &self.have
     }
     fn eta(&self) -> &str {
         &self.eta
@@ -292,12 +225,6 @@ impl Data {
     fn ratio(&self) -> &str {
         &self.ratio
     }
-    fn status(&self) -> &str {
-        &self.status
-    }
-    fn size(&self) -> &str {
-        &self.size
-    }
 }
 
 async fn get_torrent_data(client: &mut TransClient) -> Result<Vec<Data>> {
@@ -308,55 +235,50 @@ async fn get_torrent_data(client: &mut TransClient) -> Result<Vec<Data>> {
         .torrents
         .iter()
         .map(|t| {
-            let name = t.name.clone().unwrap().to_string();
+            let mut name = t.name.clone().unwrap().to_string();
+            if name.len() > 80 {
+                name.truncate(80);
+                name.push_str("...");
+            }
             let done = convert_percentage(t.percent_done.unwrap());
-            let size = convert_bytes(t.size_when_done.unwrap());
-            let have = convert_bytes(t.left_until_done.unwrap());
             let eta = convert_eta(t.eta.unwrap());
             let up = format!("{}/s", convert_bytes(t.rate_upload.unwrap()));
             let down = format!("{}/s", convert_bytes(t.rate_download.unwrap()));
-            let ratio = t.upload_ratio.unwrap().to_string();
-            let status = convert_status(t.status.unwrap());
+            let ratio = handle_ratio(t.upload_ratio.unwrap());
+
+            let remianing = t.size_when_done.unwrap() - t.left_until_done.unwrap();
+            let new = format!(
+                "{}\nStatus: {}    Have: {} of {}",
+                name,
+                convert_status(t.status.unwrap()),
+                convert_bytes(remianing),
+                convert_bytes(t.size_when_done.unwrap()),
+            );
 
             Data {
-                name,
+                name: new,
                 done,
-                size,
-                have,
                 eta,
                 up,
                 down,
                 ratio,
-                status,
             }
         })
         .sorted_by(|a, b| a.name.cmp(&b.name))
         .collect_vec())
 }
 
-fn constraint_len_calculator(items: &[Data]) -> (u16, u16, u16, u16, u16, u16, u16, u16, u16) {
+fn constraint_len_calculator(items: &[Data]) -> (u16, u16, u16, u16, u16, u16) {
     let name_len = items
         .iter()
         .map(Data::name)
         .map(UnicodeWidthStr::width)
-        .max()
+        .min()
         .unwrap_or(0);
     let done_len = items
         .iter()
         .map(Data::done)
         .flat_map(str::lines)
-        .map(UnicodeWidthStr::width)
-        .max()
-        .unwrap_or(0);
-    let size_len = items
-        .iter()
-        .map(Data::size)
-        .map(UnicodeWidthStr::width)
-        .max()
-        .unwrap_or(0);
-    let have_len = items
-        .iter()
-        .map(Data::have)
         .map(UnicodeWidthStr::width)
         .max()
         .unwrap_or(0);
@@ -384,23 +306,14 @@ fn constraint_len_calculator(items: &[Data]) -> (u16, u16, u16, u16, u16, u16, u
         .map(UnicodeWidthStr::width)
         .max()
         .unwrap_or(0);
-    let status_len = items
-        .iter()
-        .map(Data::status)
-        .map(UnicodeWidthStr::width)
-        .max()
-        .unwrap_or(0);
 
     #[allow(clippy::cast_possible_truncation)]
     (
         name_len as u16,
         done_len as u16,
-        size_len as u16,
-        have_len as u16,
         eta_len as u16,
         up_len as u16,
         down_len as u16,
         ratio_len as u16,
-        status_len as u16,
     )
 }

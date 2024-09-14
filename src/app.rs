@@ -8,7 +8,7 @@ use transmission_rpc::TransClient;
 
 use crate::{
     action::Action,
-    components::{home::Home, Component},
+    components::{home::Home, session_stats::SessionStat, Component},
     config::Config,
     tui::{Event, Tui},
 };
@@ -33,12 +33,15 @@ pub enum Mode {
 }
 
 impl App {
-    pub fn new(tick_rate: f64, frame_rate: f64, client: TransClient) -> Result<Self> {
+    pub fn new(tick_rate: f64, frame_rate: f64, mut client: TransClient) -> Result<Self> {
         let (action_tx, action_rx) = mpsc::unbounded_channel();
         Ok(Self {
             tick_rate,
             frame_rate,
-            components: vec![Box::new(Home::new(client))],
+            components: vec![
+                Box::new(SessionStat::new(&mut client)),
+                Box::new(Home::new(client)),
+            ],
             should_quit: false,
             should_suspend: false,
             config: Config::new()?,
@@ -51,7 +54,7 @@ impl App {
 
     pub async fn run(&mut self) -> Result<()> {
         let mut tui = Tui::new()?
-            // .mouse(true) // uncomment this line to enable mouse support
+            // .mouse(true)
             .tick_rate(self.tick_rate)
             .frame_rate(self.frame_rate);
         tui.enter()?;
