@@ -1,3 +1,5 @@
+use std::{cell::RefCell, rc::Rc};
+
 use clap::Parser;
 use cli::Cli;
 use color_eyre::Result;
@@ -25,9 +27,12 @@ async fn main() -> Result<()> {
     let url = args.url;
     let client;
     if let (Some(user), Some(password)) = (args.username, args.password) {
-        client = TransClient::with_auth(url.parse()?, BasicAuth { user, password });
+        client = Rc::new(RefCell::new(TransClient::with_auth(
+            url.parse()?,
+            BasicAuth { user, password },
+        )));
     } else {
-        client = TransClient::new(url.parse()?);
+        client = Rc::new(RefCell::new(TransClient::new(url.parse()?)));
     }
     let mut app = App::new(args.tick_rate, args.frame_rate, client)?;
     app.run().await?;

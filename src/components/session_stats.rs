@@ -1,3 +1,5 @@
+use std::{cell::RefCell, rc::Rc};
+
 use color_eyre::Result;
 use futures::executor::block_on;
 use ratatui::{
@@ -14,7 +16,7 @@ use crate::{action::Action, colors::Colors, utils::convert_bytes};
 use super::Component;
 
 pub struct SessionStat {
-    client: TransClient,
+    client: Rc<RefCell<TransClient>>,
     stats: SessionStats,
     color: Colors,
 }
@@ -23,7 +25,7 @@ impl Component for SessionStat {
     fn update(&mut self, action: Action) -> Result<Option<Action>> {
         match action {
             Action::Tick => {
-                self.stats = block_on(get_stats(&mut self.client))?;
+                self.stats = block_on(get_stats(self.client.clone()))?;
             }
             Action::Render => {}
             _ => {}
@@ -40,8 +42,8 @@ impl Component for SessionStat {
 }
 
 impl SessionStat {
-    pub fn new(mut client: TransClient) -> Self {
-        let stats = block_on(get_stats(&mut client)).unwrap();
+    pub fn new(client: Rc<RefCell<TransClient>>) -> Self {
+        let stats = block_on(get_stats(client.clone())).unwrap();
         Self {
             client,
             stats,
@@ -69,8 +71,8 @@ impl SessionStat {
     }
 }
 
-async fn get_stats(client: &mut TransClient) -> Result<SessionStats> {
-    let res = client.session_stats().await;
+async fn get_stats(client: Rc<RefCell<TransClient>>) -> Result<SessionStats> {
+    let res = client.borrow_mut().session_stats().await;
     match res {
         Ok(stats) => Ok(stats.arguments),
         Err(err) => panic!("Problem getting session stats: {err}"),

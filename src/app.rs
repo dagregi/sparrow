@@ -1,3 +1,5 @@
+use std::{cell::RefCell, rc::Rc};
+
 use color_eyre::Result;
 use crossterm::event::KeyEvent;
 use ratatui::prelude::Rect;
@@ -33,14 +35,14 @@ pub enum Mode {
 }
 
 impl App {
-    pub fn new(tick_rate: f64, frame_rate: f64, mut client: TransClient) -> Result<Self> {
+    pub fn new(tick_rate: f64, frame_rate: f64, client: Rc<RefCell<TransClient>>) -> Result<Self> {
         let (action_tx, action_rx) = mpsc::unbounded_channel();
         Ok(Self {
             tick_rate,
             frame_rate,
             components: vec![
-                Box::new(SessionStat::new(&mut client)),
-                Box::new(Home::new(client)),
+                Box::new(Home::new(client.clone())),
+                Box::new(SessionStat::new(client.clone())),
             ],
             should_quit: false,
             should_suspend: false,
@@ -153,7 +155,7 @@ impl App {
             }
             for component in self.components.iter_mut() {
                 if let Some(action) = component.update(action.clone())? {
-                    self.action_tx.send(action)?
+                    self.action_tx.send(action)?;
                 };
             }
         }
@@ -168,11 +170,11 @@ impl App {
 
     fn render(&mut self, tui: &mut Tui) -> Result<()> {
         tui.draw(|frame| {
-            for component in self.components.iter_mut() {
+            for component in &mut self.components {
                 if let Err(err) = component.draw(frame, frame.area()) {
                     let _ = self
                         .action_tx
-                        .send(Action::Error(format!("Failed to draw: {:?}", err)));
+                        .send(Action::Error(format!("Failed to draw: {err:?}")));
                 }
             }
         })?;

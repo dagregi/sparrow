@@ -15,14 +15,14 @@ pub fn convert_bytes(bytes: i64) -> String {
                 None
             }
         })
-        .unwrap_or(format!("{} B", bytes))
+        .unwrap_or(format!("{bytes} B"))
 }
 
 pub fn handle_ratio(ratio: f32) -> String {
     if ratio == -1_f32 {
         "None".to_string()
     } else {
-        format!("{:.2}", ratio)
+        format!("{ratio:.2}")
     }
 }
 
@@ -52,13 +52,12 @@ pub fn convert_eta(eta: i64) -> String {
         .into_iter()
         .filter_map(|(value, unit)| {
             if value > 0 {
-                Some(format!("{}{}", value, unit))
+                Some(format!("{value}{unit}"))
             } else {
                 None
             }
         })
-        .collect::<Vec<_>>()
-        .join("")
+        .collect::<String>()
     }
 }
 

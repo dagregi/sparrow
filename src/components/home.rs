@@ -1,8 +1,16 @@
+use std::{cell::RefCell, rc::Rc};
+
 use color_eyre::Result;
 use crossterm::event::{KeyCode, KeyEvent};
 use futures::executor::block_on;
 use itertools::Itertools;
-use ratatui::{prelude::*, widgets::*};
+use ratatui::{
+    prelude::{Constraint, Frame, Layout, Margin, Modifier, Rect, Style, Stylize, Text},
+    widgets::{
+        Cell, HighlightSpacing, Row, Scrollbar, ScrollbarOrientation, ScrollbarState, Table,
+        TableState,
+    },
+};
 use tokio::sync::mpsc::UnboundedSender;
 use transmission_rpc::TransClient;
 use unicode_width::UnicodeWidthStr;
@@ -18,7 +26,7 @@ use crate::{
 const ITEM_HEIGHT: usize = 4;
 
 pub struct Home {
-    client: TransClient,
+    client: Rc<RefCell<TransClient>>,
     state: TableState,
     items: Vec<Data>,
     longest_item_lens: (u16, u16, u16, u16, u16, u16),
@@ -29,8 +37,8 @@ pub struct Home {
 }
 
 impl Home {
-    pub fn new(mut client: TransClient) -> Self {
-        let data_vec = block_on(get_torrent_data(&mut client)).unwrap();
+    pub fn new(client: Rc<RefCell<TransClient>>) -> Self {
+        let data_vec = block_on(get_torrent_data(client.clone())).unwrap();
         Self {
             client,
             state: TableState::default().with_selected(0),
@@ -168,7 +176,7 @@ impl Component for Home {
     fn update(&mut self, action: Action) -> Result<Option<Action>> {
         match action {
             Action::Tick => {
-                self.items = block_on(get_torrent_data(&mut self.client))?;
+                self.items = block_on(get_torrent_data(self.client.clone()))?;
             }
             Action::Render => {}
             _ => {}
@@ -227,8 +235,8 @@ impl Data {
     }
 }
 
-async fn get_torrent_data(client: &mut TransClient) -> Result<Vec<Data>> {
-    let res = client.torrent_get(None, None).await.unwrap();
+async fn get_torrent_data(client: Rc<RefCell<TransClient>>) -> Result<Vec<Data>> {
+    let res = client.borrow_mut().torrent_get(None, None).await.unwrap();
 
     Ok(res
         .arguments
