@@ -9,7 +9,10 @@ use ratatui::{
     widgets::{Block, BorderType, Paragraph},
     Frame,
 };
-use transmission_rpc::{types::SessionStats, TransClient};
+use transmission_rpc::{
+    types::{self, SessionStats},
+    TransClient,
+};
 
 use crate::{action::Action, colors::Colors, utils::convert_bytes};
 
@@ -25,7 +28,10 @@ impl Component for SessionStat {
     fn update(&mut self, action: Action) -> Result<Option<Action>> {
         match action {
             Action::Tick => {
-                self.stats = block_on(get_stats(self.client.clone()))?;
+                self.stats = match block_on(get_stats(self.client.clone())) {
+                    Ok(stats) => stats,
+                    Err(err) => return Ok(Some(Action::Error(err.to_string()))),
+                };
             }
             Action::Render => {}
             _ => {}
@@ -71,10 +77,15 @@ impl SessionStat {
     }
 }
 
-async fn get_stats(client: Rc<RefCell<TransClient>>) -> Result<SessionStats> {
-    let res = client.borrow_mut().session_stats().await;
+async fn get_stats(client: Rc<RefCell<TransClient>>) -> types::Result<SessionStats> {
+    let res = {
+        let mut client = client.borrow_mut();
+        async move { client.session_stats().await }
+    }
+    .await;
+
     match res {
         Ok(stats) => Ok(stats.arguments),
-        Err(err) => panic!("Problem getting session stats: {err}"),
+        Err(err) => Err(err),
     }
 }

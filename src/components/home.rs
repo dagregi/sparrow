@@ -56,15 +56,18 @@ impl Home {
 
     async fn toggle_state(&mut self, state: bool, id: i64) -> types::Result<()> {
         let mut client = self.client.borrow_mut();
-        if state {
-            client
-                .torrent_action(TorrentAction::Start, vec![Id::Id(id)])
-                .await?;
-        } else {
-            client
-                .torrent_action(TorrentAction::Stop, vec![Id::Id(id)])
-                .await?;
+        async move {
+            if state {
+                client
+                    .torrent_action(TorrentAction::Start, vec![Id::Id(id)])
+                    .await
+            } else {
+                client
+                    .torrent_action(TorrentAction::Stop, vec![Id::Id(id)])
+                    .await
+            }
         }
+        .await?;
         Ok(())
     }
 
@@ -218,7 +221,10 @@ impl Component for Home {
     fn update(&mut self, action: Action) -> Result<Option<Action>> {
         match action {
             Action::Tick => {
-                self.items = block_on(get_torrent_data(self.client.clone()))?;
+                self.items = match block_on(get_torrent_data(self.client.clone())) {
+                    Ok(items) => items,
+                    Err(err) => return Ok(Some(Action::Error(err.to_string()))),
+                };
             }
             Action::Render => {}
             _ => {}
@@ -280,12 +286,18 @@ impl Data {
     }
 }
 
-async fn get_torrent_data(client: Rc<RefCell<TransClient>>) -> Result<Vec<Data>> {
-    let res = client.borrow_mut().torrent_get(None, None).await.unwrap();
+async fn get_torrent_data(client: Rc<RefCell<TransClient>>) -> types::Result<Vec<Data>> {
+    let res = {
+        let mut client = client.borrow_mut();
+        async move { client.torrent_get(None, None).await }
+    }
+    .await;
 
-    Ok(res
-        .arguments
-        .torrents
+    let torrents = match res {
+        Ok(args) => args.arguments.torrents,
+        Err(err) => return Err(err),
+    };
+    Ok(torrents
         .iter()
         .map(|t| {
             let mut name = t.name.clone().unwrap().to_string();
