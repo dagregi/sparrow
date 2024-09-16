@@ -24,7 +24,7 @@ pub struct Cli {
     #[arg(long, value_name = "PASSWORD")]
     pub password: Option<String>,
     /// Tick rate, i.e. number of ticks per second
-    #[arg(short, long, value_name = "FLOAT", default_value_t = 2.0)]
+    #[arg(short, long, value_name = "FLOAT", default_value_t = 0.5)]
     pub tick_rate: f64,
 
     /// Frame rate, i.e. number of frames per second
@@ -48,8 +48,6 @@ fn validate_url(url: &str) -> Result<String, String> {
 
 const VERSION_MESSAGE: &str = concat!(
     env!("CARGO_PKG_VERSION"),
-    "-",
-    env!("VERGEN_GIT_DESCRIBE"),
     " (",
     env!("VERGEN_BUILD_DATE"),
     ")"

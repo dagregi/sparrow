@@ -35,7 +35,7 @@ pub enum Mode {
 }
 
 impl App {
-    pub fn new(tick_rate: f64, frame_rate: f64, client: Rc<RefCell<TransClient>>) -> Result<Self> {
+    pub fn new(tick_rate: f64, frame_rate: f64, client: &Rc<RefCell<TransClient>>) -> Result<Self> {
         let (action_tx, action_rx) = mpsc::unbounded_channel();
         Ok(Self {
             tick_rate,

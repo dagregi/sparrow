@@ -60,9 +60,9 @@ impl SessionStat {
     fn render_stats(&self, frame: &mut Frame, area: Rect) {
         let stats = &self.stats;
         let stats_text = format!(
-            "Up: {}/s Down: {}/s Torrents: {} ",
-            convert_bytes(stats.upload_speed),
+            "Down: {}/s Up: {}/s Torrents: {} ",
             convert_bytes(stats.download_speed),
+            convert_bytes(stats.upload_speed),
             stats.torrent_count
         );
         let info_footer = Paragraph::new(Line::from(stats_text))

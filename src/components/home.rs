@@ -54,7 +54,13 @@ impl Home {
         }
     }
 
-    async fn toggle_state(&mut self, state: bool, id: i64) -> types::Result<()> {
+    async fn toggle_state(&mut self) -> types::Result<()> {
+        let id = self.items.get(self.state.selected().unwrap()).unwrap().id;
+        let state = self
+            .items
+            .get(self.state.selected().unwrap())
+            .unwrap()
+            .is_stalled;
         let mut client = self.client.borrow_mut();
         async move {
             if state {
@@ -68,6 +74,20 @@ impl Home {
             }
         }
         .await?;
+        Ok(())
+    }
+
+    async fn start_all(&mut self) -> types::Result<()> {
+        let mut client = self.client.borrow_mut();
+        let ids = self.items.iter().map(|t| Id::Id(t.id)).collect::<Vec<Id>>();
+        async move { client.torrent_action(TorrentAction::Start, ids).await }.await?;
+        Ok(())
+    }
+
+    async fn stop_all(&mut self) -> types::Result<()> {
+        let mut client = self.client.borrow_mut();
+        let ids = self.items.iter().map(|t| Id::Id(t.id)).collect::<Vec<Id>>();
+        async move { client.torrent_action(TorrentAction::Stop, ids).await }.await?;
         Ok(())
     }
 
@@ -121,7 +141,7 @@ impl Home {
             .add_modifier(Modifier::REVERSED)
             .fg(self.colors.selected_style_fg);
 
-        let header = ["NAME", "DONE", "ETA", "UP", "DOWN", "RATIO"]
+        let header = ["NAME", "DONE", "ETA", "DOWN", "UP", "RATIO"]
             .into_iter()
             .map(Cell::from)
             .collect::<Row>()
@@ -204,13 +224,22 @@ impl Component for Home {
                 self.bottom();
             }
             KeyCode::Char('p') => {
-                let id = self.items.get(self.state.selected().unwrap()).unwrap().id;
-                let state = self
-                    .items
-                    .get(self.state.selected().unwrap())
-                    .unwrap()
-                    .is_stalled;
-                block_on(self.toggle_state(state, id)).unwrap();
+                match block_on(self.toggle_state()) {
+                    Ok(_) => {}
+                    Err(err) => return Ok(Some(Action::Error(err.to_string()))),
+                };
+            }
+            KeyCode::Char('s') => {
+                match block_on(self.start_all()) {
+                    Ok(_) => {}
+                    Err(err) => return Ok(Some(Action::Error(err.to_string()))),
+                };
+            }
+            KeyCode::Char('S') => {
+                match block_on(self.stop_all()) {
+                    Ok(_) => {}
+                    Err(err) => return Ok(Some(Action::Error(err.to_string()))),
+                };
             }
             // Other handlers you could add here.
             _ => {}
@@ -245,7 +274,6 @@ impl Component for Home {
 struct Data {
     id: i64,
     is_stalled: bool,
-    is_finished: bool,
     name: String,
     done: String,
     eta: String,
@@ -260,8 +288,8 @@ impl Data {
             &self.name,
             &self.done,
             &self.eta,
-            &self.up,
             &self.down,
+            &self.up,
             &self.ratio,
         ]
     }
@@ -299,37 +327,37 @@ async fn get_torrent_data(client: Rc<RefCell<TransClient>>) -> types::Result<Vec
     };
     Ok(torrents
         .iter()
-        .map(|t| {
-            let mut name = t.name.clone().unwrap().to_string();
+        .filter_map(|t| -> Option<Data> {
+            let mut name = t.name.clone()?.to_string();
             if name.len() > 80 {
                 name.truncate(80);
                 name.push_str("...");
             }
-            let done = convert_percentage(t.percent_done.unwrap());
-            let eta = convert_eta(t.eta.unwrap());
-            let up = format!("{}/s", convert_bytes(t.rate_upload.unwrap()));
-            let down = format!("{}/s", convert_bytes(t.rate_download.unwrap()));
-            let ratio = handle_ratio(t.upload_ratio.unwrap());
+            let done = convert_percentage(t.percent_done?);
+            let eta = convert_eta(t.eta?);
+            let up = format!("{}/s", convert_bytes(t.rate_upload?));
+            let down = format!("{}/s", convert_bytes(t.rate_download?));
+            let ratio = handle_ratio(t.upload_ratio?);
 
-            let remianing = t.size_when_done.unwrap() - t.left_until_done.unwrap();
+            let remianing = t.size_when_done? - t.left_until_done?;
             let new = format!(
                 "{}\nStatus: {}    Have: {} of {}",
                 name,
-                convert_status(t.status.unwrap()),
+                convert_status(t.status?),
                 convert_bytes(remianing),
-                convert_bytes(t.size_when_done.unwrap()),
+                convert_bytes(t.size_when_done?),
             );
-            Data {
-                id: t.id.unwrap(),
-                is_stalled: t.is_stalled.unwrap(),
-                is_finished: t.is_finished.unwrap(),
+
+            Some(Data {
+                id: t.id?,
+                is_stalled: t.is_stalled?,
                 name: new,
                 done,
                 eta,
                 up,
                 down,
                 ratio,
-            }
+            })
         })
         .sorted_by(|a, b| a.name.cmp(&b.name))
         .collect_vec())
@@ -379,8 +407,8 @@ fn constraint_len_calculator(items: &[Data]) -> (u16, u16, u16, u16, u16, u16) {
         name_len as u16,
         done_len as u16,
         eta_len as u16,
-        up_len as u16,
         down_len as u16,
+        up_len as u16,
         ratio_len as u16,
     )
 }

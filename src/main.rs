@@ -34,7 +34,7 @@ async fn main() -> Result<()> {
     } else {
         client = Rc::new(RefCell::new(TransClient::new(url.parse()?)));
     }
-    let mut app = App::new(args.tick_rate, args.frame_rate, client)?;
+    let mut app = App::new(args.tick_rate, args.frame_rate, &client)?;
     app.run().await?;
     Ok(())
 }
