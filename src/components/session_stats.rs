@@ -54,14 +54,14 @@ impl SessionStat {
     fn render_stats(&self, frame: &mut Frame, area: Rect) {
         let stats = &self.stats;
         let stats_text = format!(
-            "up: {}/s down: {}/s torrents: {}",
+            "Up: {}/s Down: {}/s Torrents: {} ",
             convert_bytes(stats.upload_speed),
             convert_bytes(stats.download_speed),
             stats.torrent_count
         );
         let info_footer = Paragraph::new(Line::from(stats_text))
             .style(Style::new().fg(self.color.row_fg).bg(self.color.buffer_bg))
-            .centered()
+            .right_aligned()
             .block(
                 Block::bordered()
                     .border_type(BorderType::Double)

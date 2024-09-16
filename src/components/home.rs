@@ -12,7 +12,10 @@ use ratatui::{
     },
 };
 use tokio::sync::mpsc::UnboundedSender;
-use transmission_rpc::TransClient;
+use transmission_rpc::{
+    types::{self, Id, TorrentAction},
+    TransClient,
+};
 use unicode_width::UnicodeWidthStr;
 
 use super::Component;
@@ -51,7 +54,21 @@ impl Home {
         }
     }
 
-    pub fn next(&mut self) {
+    async fn toggle_state(&mut self, state: bool, id: i64) -> types::Result<()> {
+        let mut client = self.client.borrow_mut();
+        if state {
+            client
+                .torrent_action(TorrentAction::Start, vec![Id::Id(id)])
+                .await?;
+        } else {
+            client
+                .torrent_action(TorrentAction::Stop, vec![Id::Id(id)])
+                .await?;
+        }
+        Ok(())
+    }
+
+    fn next(&mut self) {
         let i = match self.state.selected() {
             Some(i) => {
                 if i >= self.items.len() - 1 {
@@ -66,7 +83,7 @@ impl Home {
         self.scroll_state = self.scroll_state.position(i * ITEM_HEIGHT);
     }
 
-    pub fn previous(&mut self) {
+    fn previous(&mut self) {
         let i = match self.state.selected() {
             Some(i) => {
                 if i == 0 {
@@ -79,6 +96,16 @@ impl Home {
         };
         self.state.select(Some(i));
         self.scroll_state = self.scroll_state.position(i * ITEM_HEIGHT);
+    }
+
+    fn top(&mut self) {
+        self.state.select_first();
+        self.scroll_state.first();
+    }
+
+    fn bottom(&mut self) {
+        self.state.select_last();
+        self.scroll_state.last();
     }
 }
 
@@ -118,7 +145,7 @@ impl Home {
                 Constraint::Min(self.longest_item_lens.2 + 1),
                 Constraint::Min(self.longest_item_lens.3 + 1),
                 Constraint::Min(self.longest_item_lens.4 + 1),
-                Constraint::Min(self.longest_item_lens.5),
+                Constraint::Min(self.longest_item_lens.5 + 1),
             ],
         )
         .header(header)
@@ -167,6 +194,21 @@ impl Component for Home {
             KeyCode::Char('k') | KeyCode::Up => {
                 self.previous();
             }
+            KeyCode::Char('g') => {
+                self.top();
+            }
+            KeyCode::Char('G') => {
+                self.bottom();
+            }
+            KeyCode::Char('p') => {
+                let id = self.items.get(self.state.selected().unwrap()).unwrap().id;
+                let state = self
+                    .items
+                    .get(self.state.selected().unwrap())
+                    .unwrap()
+                    .is_stalled;
+                block_on(self.toggle_state(state, id)).unwrap();
+            }
             // Other handlers you could add here.
             _ => {}
         }
@@ -195,6 +237,9 @@ impl Component for Home {
 }
 
 struct Data {
+    id: i64,
+    is_stalled: bool,
+    is_finished: bool,
     name: String,
     done: String,
     eta: String,
@@ -262,8 +307,10 @@ async fn get_torrent_data(client: Rc<RefCell<TransClient>>) -> Result<Vec<Data>>
                 convert_bytes(remianing),
                 convert_bytes(t.size_when_done.unwrap()),
             );
-
             Data {
+                id: t.id.unwrap(),
+                is_stalled: t.is_stalled.unwrap(),
+                is_finished: t.is_finished.unwrap(),
                 name: new,
                 done,
                 eta,
