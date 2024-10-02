@@ -18,6 +18,7 @@ use transmission_rpc::{
 
 use crate::{
     action::Action,
+    app::Mode,
     colors::Colors,
     utils::{convert_bytes, convert_eta, convert_percentage, convert_status, handle_ratio},
 };
@@ -66,6 +67,12 @@ impl Component for TorrentInfo {
 
     fn handle_key_event(&mut self, key: KeyEvent) -> Result<Option<Action>> {
         match key.code {
+            KeyCode::Char('q') => {
+                return Ok(Some(Action::Quit));
+            }
+            KeyCode::Esc => {
+                return Ok(Some(Action::Mode(Mode::Home)));
+            }
             KeyCode::Char('l') | KeyCode::Right => self.next_tab(),
             KeyCode::Char('h') | KeyCode::Left => self.previous_tab(),
             _ => {}
@@ -107,7 +114,9 @@ impl TorrentInfo {
 
         frame.render_widget(tabs, rects[0]);
         match self.selected_tab {
-            SelectedTab::Info => self.selected_tab.render_info(frame, rects[1]),
+            SelectedTab::Info => self
+                .selected_tab
+                .render_info(frame, rects[1], &self.torrent),
             SelectedTab::Peers => self.selected_tab.render_peers(frame, rects[1]),
             SelectedTab::Tracker => self.selected_tab.render_tracker(frame, rects[1]),
             SelectedTab::Files => self.selected_tab.render_files(frame, rects[1]),
@@ -147,8 +156,45 @@ impl SelectedTab {
 }
 
 impl SelectedTab {
-    fn render_info(self, frame: &mut Frame, area: Rect) {
-        frame.render_widget(Paragraph::new("Hello"), area);
+    fn render_info(self, frame: &mut Frame, area: Rect, torrent: &Torrent) {
+        let activity = vec![
+            Line::from("Activity".bold()),
+            Line::from(format!(
+                "Have: {} of {} ({})",
+                convert_bytes(torrent.size_when_done.unwrap() - torrent.left_until_done.unwrap()),
+                convert_bytes(torrent.size_when_done.unwrap()),
+                convert_percentage(torrent.percent_done.unwrap()),
+            )),
+            Line::from(format!(
+                "Uploaded: {} (Ratio: {})",
+                convert_bytes(torrent.uploaded_ever.unwrap()),
+                handle_ratio(torrent.upload_ratio.unwrap()),
+            )),
+            Line::from(format!(
+                "Downloaded: {}",
+                convert_bytes(torrent.size_when_done.unwrap() - torrent.left_until_done.unwrap()),
+            )),
+            Line::from(format!(
+                "Remaining Time: {}",
+                convert_eta(torrent.eta.unwrap())
+            )),
+            Line::from(format!(
+                "State: {}",
+                convert_status(torrent.status.unwrap())
+            )),
+            Line::from("Details".bold()),
+            Line::from(format!(
+                "Size: {}",
+                convert_bytes(torrent.total_size.unwrap()),
+            )),
+            Line::from(format!(
+                "Location: {}",
+                torrent.download_dir.clone().unwrap()
+            )),
+            Line::from(format!("Hash: {}", torrent.hash_string.clone().unwrap())),
+        ];
+        let act = Paragraph::new(Text::from(activity));
+        frame.render_widget(act, area);
     }
     fn render_peers(self, frame: &mut Frame, area: Rect) {
         frame.render_widget(Paragraph::new("Peers"), area);

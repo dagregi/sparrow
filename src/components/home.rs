@@ -21,6 +21,7 @@ use unicode_width::UnicodeWidthStr;
 use super::Component;
 use crate::{
     action::Action,
+    app::Mode,
     colors::Colors,
     config::Config,
     utils::{convert_bytes, convert_eta, convert_percentage, convert_status, handle_ratio},
@@ -211,6 +212,12 @@ impl Component for Home {
 
     fn handle_key_event(&mut self, key_event: KeyEvent) -> Result<Option<Action>> {
         match key_event.code {
+            KeyCode::Char('q') => {
+                return Ok(Some(Action::Quit));
+            }
+            KeyCode::Char('l') | KeyCode::Enter => {
+                return Ok(Some(Action::Mode(Mode::Info)));
+            }
             KeyCode::Char('j') | KeyCode::Down => {
                 self.next();
             }

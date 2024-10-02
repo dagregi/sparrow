@@ -10,13 +10,14 @@ use transmission_rpc::TransClient;
 
 use crate::{
     action::Action,
-    components::{home::Home, session_stats::SessionStat, Component},
+    components::{home::Home, session_stats::SessionStat, torrent_info::TorrentInfo, Component},
     config::Config,
     tui::{Event, Tui},
 };
 
 pub struct App {
     config: Config,
+    client: Rc<RefCell<TransClient>>,
     tick_rate: f64,
     frame_rate: f64,
     components: Vec<Box<dyn Component>>,
@@ -32,17 +33,19 @@ pub struct App {
 pub enum Mode {
     #[default]
     Home,
+    Info,
 }
 
 impl App {
     pub fn new(tick_rate: f64, frame_rate: f64, client: &Rc<RefCell<TransClient>>) -> Result<Self> {
         let (action_tx, action_rx) = mpsc::unbounded_channel();
         Ok(Self {
+            client: client.clone(),
             tick_rate,
             frame_rate,
             components: vec![
-                Box::new(Home::new(client.clone())),
                 Box::new(SessionStat::new(client.clone())),
+                Box::new(Home::new(client.clone())),
             ],
             should_quit: false,
             should_suspend: false,
@@ -151,6 +154,7 @@ impl App {
                 Action::ClearScreen => tui.terminal.clear()?,
                 Action::Resize(w, h) => self.handle_resize(tui, w, h)?,
                 Action::Render => self.render(tui)?,
+                Action::Mode(mode) => self.handle_modes(mode),
                 _ => {}
             }
             for component in self.components.iter_mut() {
@@ -166,6 +170,21 @@ impl App {
         tui.resize(Rect::new(0, 0, w, h))?;
         self.render(tui)?;
         Ok(())
+    }
+
+    fn handle_modes(&mut self, mode: Mode) {
+        match mode {
+            Mode::Home => {
+                self.components.pop();
+                self.components
+                    .push(Box::new(Home::new(self.client.clone())));
+            }
+            Mode::Info => {
+                self.components.pop();
+                self.components
+                    .push(Box::new(TorrentInfo::new(self.client.clone())));
+            }
+        }
     }
 
     fn render(&mut self, tui: &mut Tui) -> Result<()> {
