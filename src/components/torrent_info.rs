@@ -3,9 +3,10 @@ use std::{cell::RefCell, rc::Rc};
 use color_eyre::Result;
 use crossterm::event::{KeyCode, KeyEvent};
 use futures::executor::block_on;
+use itertools::Itertools;
 use ratatui::{
     layout::{Constraint, Layout, Rect},
-    style::{palette::tailwind, Color, Stylize},
+    style::{palette::tailwind, Modifier, Style, Stylize},
     text::{Line, Text},
     widgets::{Paragraph, Tabs},
     Frame,
@@ -20,7 +21,10 @@ use crate::{
     action::Action,
     app::Mode,
     colors::Colors,
-    utils::{convert_bytes, convert_eta, convert_percentage, convert_status, handle_ratio},
+    utils::{
+        convert_bytes, convert_eta, convert_percentage, convert_priority, convert_status,
+        handle_ratio,
+    },
 };
 
 use super::Component;
@@ -29,7 +33,7 @@ pub struct TorrentInfo {
     client: Rc<RefCell<TransClient>>,
     torrent: Torrent,
     selected_tab: SelectedTab,
-    color: Colors,
+    colors: Colors,
 }
 
 #[derive(Default, Clone, Copy, Display, FromRepr, EnumIter)]
@@ -73,8 +77,13 @@ impl Component for TorrentInfo {
             KeyCode::Esc => {
                 return Ok(Some(Action::Mode(Mode::Home)));
             }
-            KeyCode::Char('l') | KeyCode::Right => self.next_tab(),
-            KeyCode::Char('h') | KeyCode::Left => self.previous_tab(),
+            KeyCode::Char('l') | KeyCode::Right => {
+                self.next_tab();
+            }
+            KeyCode::Char('h') | KeyCode::Left => {
+                self.previous_tab();
+                return Ok(Some(Action::ClearScreen));
+            }
             _ => {}
         }
         Ok(None)
@@ -88,7 +97,7 @@ impl TorrentInfo {
             client,
             torrent,
             selected_tab: SelectedTab::Info,
-            color: Colors::new(),
+            colors: Colors::new(),
         }
     }
 
@@ -102,7 +111,9 @@ impl TorrentInfo {
 
     fn render_tabs(&self, frame: &mut Frame, area: Rect) {
         let titles = SelectedTab::iter().map(SelectedTab::title);
-        let highlight_style = (Color::default(), self.color.tab_selected);
+        let highlight_style = Style::default()
+            .add_modifier(Modifier::REVERSED)
+            .fg(self.colors.tab_selected);
         let selected_tab_index = self.selected_tab as usize;
         let tabs = Tabs::new(titles)
             .highlight_style(highlight_style)
@@ -110,7 +121,7 @@ impl TorrentInfo {
             .padding("", "")
             .divider(" ");
 
-        let rects = Layout::vertical([Constraint::Length(2), Constraint::Min(5)]).split(area);
+        let rects = Layout::vertical([Constraint::Min(2), Constraint::Percentage(100)]).split(area);
 
         frame.render_widget(tabs, rects[0]);
         match self.selected_tab {
@@ -118,8 +129,13 @@ impl TorrentInfo {
                 .selected_tab
                 .render_info(frame, rects[1], &self.torrent),
             SelectedTab::Peers => self.selected_tab.render_peers(frame, rects[1]),
-            SelectedTab::Tracker => self.selected_tab.render_tracker(frame, rects[1]),
-            SelectedTab::Files => self.selected_tab.render_files(frame, rects[1]),
+            SelectedTab::Tracker => {
+                self.selected_tab
+                    .render_tracker(frame, rects[1], &self.torrent)
+            }
+            SelectedTab::Files => self
+                .selected_tab
+                .render_files(frame, rects[1], &self.torrent),
         }
     }
 }
@@ -182,6 +198,7 @@ impl SelectedTab {
                 "State: {}",
                 convert_status(torrent.status.unwrap())
             )),
+            Line::from(format!("Error: {}", torrent.error_string.clone().unwrap())),
             Line::from("Details".bold()),
             Line::from(format!(
                 "Size: {}",
@@ -193,17 +210,42 @@ impl SelectedTab {
             )),
             Line::from(format!("Hash: {}", torrent.hash_string.clone().unwrap())),
         ];
-        let act = Paragraph::new(Text::from(activity));
-        frame.render_widget(act, area);
+
+        frame.render_widget(Paragraph::new(Text::from(activity)), area);
     }
     fn render_peers(self, frame: &mut Frame, area: Rect) {
-        frame.render_widget(Paragraph::new("Peers"), area);
+        frame.render_widget(Paragraph::new("Under Construction"), area);
     }
-    fn render_tracker(self, frame: &mut Frame, area: Rect) {
-        frame.render_widget(Paragraph::new("Trackers"), area);
+    fn render_tracker(self, frame: &mut Frame, area: Rect, torrent: &Torrent) {
+        let lines = torrent
+            .clone()
+            .tracker_stats
+            .unwrap()
+            .iter()
+            .map(|t| Line::from(format!("{} {:?}", t.host, t.announce_state)))
+            .collect_vec();
+
+        frame.render_widget(Paragraph::new(Text::from(lines)), area);
     }
-    fn render_files(self, frame: &mut Frame, area: Rect) {
-        frame.render_widget(Paragraph::new("Files"), area);
+    fn render_files(self, frame: &mut Frame, area: Rect, torrent: &Torrent) {
+        let files = torrent
+            .clone()
+            .files
+            .unwrap()
+            .iter()
+            .enumerate()
+            .filter_map(|(i, t)| {
+                Some(Line::from(format!(
+                    "{}\t{}/{}\t{}\t{}",
+                    t.name,
+                    convert_bytes(t.bytes_completed),
+                    convert_bytes(t.length),
+                    torrent.clone().file_stats?.get(i)?.wanted,
+                    convert_priority(torrent.file_stats.clone()?.get(i)?.priority.clone()),
+                )))
+            })
+            .collect_vec();
+        frame.render_widget(Paragraph::new(Text::from(files)), area);
     }
 
     /// Return tab's name as a styled `Line`

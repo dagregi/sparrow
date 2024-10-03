@@ -28,7 +28,7 @@ impl Colors {
             alt_row_color: tailwind::SLATE.c900,
             footer_border_color: color.c400,
             tab_title_bg: color.c900,
-            tab_selected: color.c700,
+            tab_selected: color.c400,
         }
     }
 }

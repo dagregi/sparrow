@@ -334,7 +334,7 @@ async fn get_torrent_data(client: Rc<RefCell<TransClient>>) -> types::Result<Vec
     };
     Ok(torrents
         .iter()
-        .filter_map(|t| -> Option<Data> {
+        .filter_map(|t| {
             let mut name = t.name.clone()?.to_string();
             if name.len() > 80 {
                 name.truncate(80);
