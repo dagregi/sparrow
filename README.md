@@ -1,5 +1,7 @@
 # sparrow
 
+[![CI](https://github.com/dagregi/sparrow/workflows/CI/badge.svg)](https://github.com/dagregi/sparrow/actions)
+
 TUI for transmission remote
 
 ## Installation
@@ -50,6 +52,7 @@ sparrow --username "user" --password "very_secret_password"
 -   -h, --help
 
     Print help
+
 -   -V, --version
 
     Print version
@@ -93,7 +96,7 @@ sparrow --username "user" --password "very_secret_password"
 
 ## Credits
 
-[ratatui](https://github.org/ratatui/ratatui) for the amazing TUI library.
+[ratatui](https://github.com/ratatui/ratatui) for the amazing TUI library.
 
 ## Contributing
 
