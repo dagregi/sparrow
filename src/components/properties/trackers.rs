@@ -22,7 +22,12 @@ impl<'a> TrackersTab<'a> {
             .data
             .trackers
             .iter()
-            .map(|tracker| Line::from(format!("{} {}", tracker.host, tracker.next_announce)))
+            .map(|tracker| {
+                Line::from(format!(
+                    "{}\t{}\t{}",
+                    tracker.host, tracker.next_announce, tracker.is_backup
+                ))
+            })
             .collect_vec();
 
         frame.render_widget(Paragraph::new(Text::from(lines)), area);

@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use ratatui::{layout::Rect, widgets::Paragraph, Frame};
 
 use super::TorrentData;

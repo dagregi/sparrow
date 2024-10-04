@@ -163,7 +163,6 @@ async fn map_torrent_data(
                 .iter()
                 .map(|tr| TrackerData {
                     host: tr.host.to_string(),
-                    sitename: tr.sitename.to_string(),
                     is_backup: tr.is_backup,
                     next_announce: tr.next_announce_time,
                 })
@@ -185,7 +184,6 @@ async fn map_torrent_data(
                 .collect_vec();
 
             Some(TorrentData {
-                id: t.id?,
                 is_stalled: t.is_stalled?,
                 name: t.name?,
                 eta: convert_eta(t.eta?),
@@ -236,9 +234,7 @@ impl SelectedTab {
     }
 }
 
-#[derive(Clone)]
 pub struct TorrentData {
-    id: i64,
     is_stalled: bool,
     name: String,
     percent_done: String,
@@ -258,15 +254,12 @@ pub struct TorrentData {
     files: Vec<FilesData>,
 }
 
-#[derive(Clone)]
 pub struct TrackerData {
     host: String,
-    sitename: String,
     is_backup: bool,
     next_announce: DateTime<Utc>,
 }
 
-#[derive(Clone)]
 pub struct FilesData {
     name: String,
     downloaded: String,
