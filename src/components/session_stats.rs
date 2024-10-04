@@ -9,12 +9,9 @@ use ratatui::{
     widgets::{Block, BorderType, Paragraph},
     Frame,
 };
-use transmission_rpc::{
-    types::{self, SessionStats},
-    TransClient,
-};
+use transmission_rpc::{types::SessionStats, TransClient};
 
-use crate::{action::Action, colors::Colors, utils::convert_bytes};
+use crate::{action::Action, app::AppError, colors::Colors, utils::convert_bytes};
 
 use super::Component;
 
@@ -48,13 +45,13 @@ impl Component for SessionStat {
 }
 
 impl SessionStat {
-    pub fn new(client: Rc<RefCell<TransClient>>) -> Self {
-        let stats = block_on(get_stats(client.clone())).unwrap();
-        Self {
+    pub fn new(client: Rc<RefCell<TransClient>>) -> Result<Self> {
+        let stats = block_on(get_stats(client.clone()))?;
+        Ok(Self {
             client,
             stats,
             color: Colors::new(),
-        }
+        })
     }
 
     fn render_stats(&self, frame: &mut Frame, area: Rect) {
@@ -77,7 +74,7 @@ impl SessionStat {
     }
 }
 
-async fn get_stats(client: Rc<RefCell<TransClient>>) -> types::Result<SessionStats> {
+async fn get_stats(client: Rc<RefCell<TransClient>>) -> Result<SessionStats, AppError> {
     let res = {
         let mut client = client.borrow_mut();
         async move { client.session_stats().await }
@@ -86,6 +83,6 @@ async fn get_stats(client: Rc<RefCell<TransClient>>) -> types::Result<SessionSta
 
     match res {
         Ok(stats) => Ok(stats.arguments),
-        Err(err) => Err(err),
+        Err(err) => Err(AppError::WithMessage(err.to_string())),
     }
 }

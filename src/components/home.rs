@@ -21,7 +21,7 @@ use unicode_width::UnicodeWidthStr;
 use super::Component;
 use crate::{
     action::Action,
-    app::Mode,
+    app::{AppError, Mode},
     colors::Colors,
     config::Config,
     utils::{convert_bytes, convert_eta, convert_percentage, convert_status, handle_ratio},
@@ -41,9 +41,9 @@ pub struct Home {
 }
 
 impl Home {
-    pub fn new(client: Rc<RefCell<TransClient>>) -> Self {
-        let data_vec = block_on(get_torrent_data(client.clone())).unwrap();
-        Self {
+    pub fn new(client: Rc<RefCell<TransClient>>) -> Result<Self> {
+        let data_vec = block_on(get_torrent_data(&client))?;
+        Ok(Self {
             client,
             state: TableState::default().with_selected(0),
             longest_item_lens: constraint_len_calculator(&data_vec),
@@ -52,15 +52,19 @@ impl Home {
             items: data_vec,
             command_tx: None,
             config: Config::default(),
-        }
+        })
     }
 
     async fn toggle_state(&mut self) -> types::Result<()> {
-        let id = self.items.get(self.state.selected().unwrap()).unwrap().id;
+        let id = self
+            .items
+            .get(self.state.selected().ok_or(AppError::NoRowSelected)?)
+            .ok_or(AppError::OutOfBound)?
+            .id;
         let state = self
             .items
-            .get(self.state.selected().unwrap())
-            .unwrap()
+            .get(self.state.selected().ok_or(AppError::NoRowSelected)?)
+            .ok_or(AppError::OutOfBound)?
             .is_stalled;
         let mut client = self.client.borrow_mut();
         async move {
@@ -80,14 +84,14 @@ impl Home {
 
     async fn start_all(&mut self) -> types::Result<()> {
         let mut client = self.client.borrow_mut();
-        let ids = self.items.iter().map(|t| Id::Id(t.id)).collect::<Vec<Id>>();
+        let ids = self.items.iter().map(|t| Id::Id(t.id)).collect_vec();
         async move { client.torrent_action(TorrentAction::Start, ids).await }.await?;
         Ok(())
     }
 
     async fn stop_all(&mut self) -> types::Result<()> {
         let mut client = self.client.borrow_mut();
-        let ids = self.items.iter().map(|t| Id::Id(t.id)).collect::<Vec<Id>>();
+        let ids = self.items.iter().map(|t| Id::Id(t.id)).collect_vec();
         async move { client.torrent_action(TorrentAction::Stop, ids).await }.await?;
         Ok(())
     }
@@ -257,7 +261,7 @@ impl Component for Home {
     fn update(&mut self, action: Action) -> Result<Option<Action>> {
         match action {
             Action::Tick => {
-                self.items = match block_on(get_torrent_data(self.client.clone())) {
+                self.items = match block_on(get_torrent_data(&self.client)) {
                     Ok(items) => items,
                     Err(err) => return Ok(Some(Action::Error(err.to_string()))),
                 };
@@ -284,8 +288,8 @@ struct Data {
     name: String,
     done: String,
     eta: String,
-    up: String,
-    down: String,
+    upload_speed: String,
+    download_speed: String,
     ratio: String,
 }
 
@@ -295,8 +299,8 @@ impl Data {
             &self.name,
             &self.done,
             &self.eta,
-            &self.down,
-            &self.up,
+            &self.download_speed,
+            &self.upload_speed,
             &self.ratio,
         ]
     }
@@ -311,17 +315,17 @@ impl Data {
         &self.eta
     }
     fn up(&self) -> &str {
-        &self.up
+        &self.upload_speed
     }
     fn down(&self) -> &str {
-        &self.down
+        &self.download_speed
     }
     fn ratio(&self) -> &str {
         &self.ratio
     }
 }
 
-async fn get_torrent_data(client: Rc<RefCell<TransClient>>) -> types::Result<Vec<Data>> {
+async fn get_torrent_data(client: &Rc<RefCell<TransClient>>) -> Result<Vec<Data>, AppError> {
     let res = {
         let mut client = client.borrow_mut();
         async move { client.torrent_get(None, None).await }
@@ -330,39 +334,39 @@ async fn get_torrent_data(client: Rc<RefCell<TransClient>>) -> types::Result<Vec
 
     let torrents = match res {
         Ok(args) => args.arguments.torrents,
-        Err(err) => return Err(err),
+        Err(err) => return Err(AppError::WithMessage(err.to_string())),
     };
+
     Ok(torrents
         .iter()
         .filter_map(|t| {
-            let mut name = t.name.clone()?.to_string();
-            if name.len() > 80 {
-                name.truncate(80);
-                name.push_str("...");
+            let mut raw_name = t.name.clone()?.to_string();
+            if raw_name.len() > 80 {
+                raw_name.truncate(80);
+                raw_name.push_str("...");
             }
             let done = convert_percentage(t.percent_done?);
             let eta = convert_eta(t.eta?);
-            let up = format!("{}/s", convert_bytes(t.rate_upload?));
-            let down = format!("{}/s", convert_bytes(t.rate_download?));
+            let upload_speed = format!("{}/s", convert_bytes(t.rate_upload?));
+            let download_speed = format!("{}/s", convert_bytes(t.rate_download?));
             let ratio = handle_ratio(t.upload_ratio?);
 
-            let remianing = t.size_when_done? - t.left_until_done?;
-            let new = format!(
+            let name = format!(
                 "{}\nStatus: {}    Have: {} of {}",
-                name,
+                raw_name,
                 convert_status(t.status?),
-                convert_bytes(remianing),
+                convert_bytes(t.size_when_done? - t.left_until_done?),
                 convert_bytes(t.size_when_done?),
             );
 
             Some(Data {
                 id: t.id?,
                 is_stalled: t.is_stalled?,
-                name: new,
+                name,
                 done,
                 eta,
-                up,
-                down,
+                upload_speed,
+                download_speed,
                 ratio,
             })
         })
