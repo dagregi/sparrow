@@ -216,7 +216,7 @@ impl Component for Home {
                 return Ok(Some(Action::Quit));
             }
             KeyCode::Char('l') | KeyCode::Enter => {
-                return Ok(Some(Action::Mode(Mode::Info)));
+                return Ok(Some(Action::Mode(Mode::Properties)));
             }
             KeyCode::Char('j') | KeyCode::Down => {
                 self.next();
@@ -232,19 +232,19 @@ impl Component for Home {
             }
             KeyCode::Char('p') => {
                 match block_on(self.toggle_state()) {
-                    Ok(_) => {}
+                    Ok(()) => {}
                     Err(err) => return Ok(Some(Action::Error(err.to_string()))),
                 };
             }
             KeyCode::Char('s') => {
                 match block_on(self.start_all()) {
-                    Ok(_) => {}
+                    Ok(()) => {}
                     Err(err) => return Ok(Some(Action::Error(err.to_string()))),
                 };
             }
             KeyCode::Char('S') => {
                 match block_on(self.stop_all()) {
-                    Ok(_) => {}
+                    Ok(()) => {}
                     Err(err) => return Ok(Some(Action::Error(err.to_string()))),
                 };
             }

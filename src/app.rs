@@ -10,10 +10,29 @@ use transmission_rpc::TransClient;
 
 use crate::{
     action::Action,
-    components::{home::Home, session_stats::SessionStat, torrent_info::TorrentInfo, Component},
+    components::{home::Home, properties::Properties, session_stats::SessionStat, Component},
     config::Config,
     tui::{Event, Tui},
 };
+
+#[derive(Clone, Debug)]
+pub enum AppError {
+    OutOfBound,
+    NoRowSelected,
+    WithMessage(String),
+}
+
+impl std::fmt::Display for AppError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AppError::OutOfBound => write!(f, "Index out of bound"),
+            AppError::NoRowSelected => write!(f, "No row selected!"),
+            AppError::WithMessage(msg) => write!(f, "Message: {}", msg),
+        }
+    }
+}
+
+impl std::error::Error for AppError {}
 
 pub struct App {
     config: Config,
@@ -33,7 +52,7 @@ pub struct App {
 pub enum Mode {
     #[default]
     Home,
-    Info,
+    Properties,
 }
 
 impl App {
@@ -44,8 +63,8 @@ impl App {
             tick_rate,
             frame_rate,
             components: vec![
-                Box::new(SessionStat::new(client.clone())),
-                Box::new(Home::new(client.clone())),
+                Box::new(SessionStat::new(client.clone())?),
+                Box::new(Home::new(client.clone())?),
             ],
             should_quit: false,
             should_suspend: false,
@@ -154,7 +173,7 @@ impl App {
                 Action::ClearScreen => tui.terminal.clear()?,
                 Action::Resize(w, h) => self.handle_resize(tui, w, h)?,
                 Action::Render => self.render(tui)?,
-                Action::Mode(mode) => self.handle_modes(mode),
+                Action::Mode(mode) => self.handle_modes(mode)?,
                 _ => {}
             }
             for component in self.components.iter_mut() {
@@ -172,19 +191,20 @@ impl App {
         Ok(())
     }
 
-    fn handle_modes(&mut self, mode: Mode) {
+    fn handle_modes(&mut self, mode: Mode) -> Result<()> {
         match mode {
             Mode::Home => {
                 self.components.pop();
                 self.components
-                    .push(Box::new(Home::new(self.client.clone())));
+                    .push(Box::new(Home::new(self.client.clone())?));
             }
-            Mode::Info => {
+            Mode::Properties => {
                 self.components.pop();
                 self.components
-                    .push(Box::new(TorrentInfo::new(self.client.clone())));
+                    .push(Box::new(Properties::new(self.client.clone())?));
             }
         }
+        Ok(())
     }
 
     fn render(&mut self, tui: &mut Tui) -> Result<()> {
