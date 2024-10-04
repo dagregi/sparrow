@@ -87,6 +87,7 @@ sparrow --username "user" --password "very_secret_password"
 ## TODO
 
 -   [x] Add a component to show torrent information
+-   [x] Better error handling
 -   [ ] Filter/Search for torrents in the list
 -   [ ] Add a help modal/page to show keybindings
 -   [ ] File viewer for the torrents
