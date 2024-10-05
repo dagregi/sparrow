@@ -30,7 +30,7 @@ impl<'a> InfoTab<'a> {
             )),
             Line::from(format!("Downloaded: {}", self.data.downloaded,)),
             Line::from(format!("Remaining Time: {}", self.data.eta)),
-            Line::from(format!("State: {}", self.data.is_stalled)),
+            Line::from(format!("State: {}", self.data.status)),
             Line::from(format!("Error: {}", self.data.error)),
             Line::from("Details".bold()),
             Line::from(format!("Name: {}", self.data.name)),

@@ -13,6 +13,7 @@ mod cli;
 mod colors;
 mod components;
 mod config;
+mod data;
 mod errors;
 mod logging;
 mod tui;

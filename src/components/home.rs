@@ -24,7 +24,7 @@ use crate::{
     app::{AppError, Mode},
     colors::Colors,
     config::Config,
-    utils::{convert_bytes, convert_eta, convert_percentage, convert_status, handle_ratio},
+    data::{map_torrent_data, TorrentData},
 };
 
 const ITEM_HEIGHT: usize = 4;
@@ -32,7 +32,7 @@ const ITEM_HEIGHT: usize = 4;
 pub struct Home {
     client: Rc<RefCell<TransClient>>,
     state: TableState,
-    items: Vec<Data>,
+    items: Vec<TorrentData>,
     longest_item_lens: (u16, u16, u16, u16, u16, u16),
     colors: Colors,
     scroll_state: ScrollbarState,
@@ -42,7 +42,7 @@ pub struct Home {
 
 impl Home {
     pub fn new(client: Rc<RefCell<TransClient>>, id: Option<i64>) -> Result<Self> {
-        let data_vec = block_on(get_torrent_data(&client))?;
+        let data_vec = block_on(map_torrent_data(&client, None))?;
         let index = match id {
             Some(id) => data_vec
                 .iter()
@@ -275,7 +275,7 @@ impl Component for Home {
     fn update(&mut self, action: Action) -> Result<Option<Action>> {
         match action {
             Action::Tick => {
-                self.items = match block_on(get_torrent_data(&self.client)) {
+                self.items = match block_on(map_torrent_data(&self.client, None)) {
                     Ok(items) => items,
                     Err(err) => return Ok(Some(Action::Error(err.to_string()))),
                 };
@@ -296,133 +296,41 @@ impl Component for Home {
     }
 }
 
-struct Data {
-    id: i64,
-    is_stalled: bool,
-    name: String,
-    done: String,
-    eta: String,
-    upload_speed: String,
-    download_speed: String,
-    ratio: String,
-}
-
-impl Data {
-    const fn ref_array(&self) -> [&String; 6] {
-        [
-            &self.name,
-            &self.done,
-            &self.eta,
-            &self.download_speed,
-            &self.upload_speed,
-            &self.ratio,
-        ]
-    }
-
-    fn name(&self) -> &str {
-        &self.name
-    }
-    fn done(&self) -> &str {
-        &self.done
-    }
-    fn eta(&self) -> &str {
-        &self.eta
-    }
-    fn up(&self) -> &str {
-        &self.upload_speed
-    }
-    fn down(&self) -> &str {
-        &self.download_speed
-    }
-    fn ratio(&self) -> &str {
-        &self.ratio
-    }
-}
-
-async fn get_torrent_data(client: &Rc<RefCell<TransClient>>) -> Result<Vec<Data>, AppError> {
-    let res = {
-        let mut client = client.borrow_mut();
-        async move { client.torrent_get(None, None).await }
-    }
-    .await;
-
-    let torrents = match res {
-        Ok(args) => args.arguments.torrents,
-        Err(err) => return Err(AppError::WithMessage(err.to_string())),
-    };
-
-    Ok(torrents
-        .iter()
-        .filter_map(|t| {
-            let mut raw_name = t.name.clone()?.to_string();
-            if raw_name.len() > 80 {
-                raw_name.truncate(80);
-                raw_name.push_str("...");
-            }
-            let done = convert_percentage(t.percent_done?);
-            let eta = convert_eta(t.eta?);
-            let upload_speed = format!("{}/s", convert_bytes(t.rate_upload?));
-            let download_speed = format!("{}/s", convert_bytes(t.rate_download?));
-            let ratio = handle_ratio(t.upload_ratio?);
-
-            let name = format!(
-                "{}\nStatus: {}    Have: {} of {}",
-                raw_name,
-                convert_status(t.status?),
-                convert_bytes(t.size_when_done? - t.left_until_done?),
-                convert_bytes(t.size_when_done?),
-            );
-
-            Some(Data {
-                id: t.id?,
-                is_stalled: t.is_stalled?,
-                name,
-                done,
-                eta,
-                upload_speed,
-                download_speed,
-                ratio,
-            })
-        })
-        .sorted_by(|a, b| a.name.cmp(&b.name))
-        .collect_vec())
-}
-
-fn constraint_len_calculator(items: &[Data]) -> (u16, u16, u16, u16, u16, u16) {
+fn constraint_len_calculator(items: &[TorrentData]) -> (u16, u16, u16, u16, u16, u16) {
     let name_len = items
         .iter()
-        .map(Data::name)
+        .map(TorrentData::formatted_name)
         .map(UnicodeWidthStr::width)
         .min()
         .unwrap_or(0);
     let done_len = items
         .iter()
-        .map(Data::done)
+        .map(TorrentData::percent_done)
         .flat_map(str::lines)
         .map(UnicodeWidthStr::width)
         .max()
         .unwrap_or(0);
     let eta_len = items
         .iter()
-        .map(Data::eta)
+        .map(TorrentData::eta)
         .map(UnicodeWidthStr::width)
         .max()
         .unwrap_or(0);
     let up_len = items
         .iter()
-        .map(Data::up)
+        .map(TorrentData::upload_speed)
         .map(UnicodeWidthStr::width)
         .max()
         .unwrap_or(0);
     let down_len = items
         .iter()
-        .map(Data::down)
+        .map(TorrentData::download_speed)
         .map(UnicodeWidthStr::width)
         .max()
         .unwrap_or(0);
     let ratio_len = items
         .iter()
-        .map(Data::ratio)
+        .map(TorrentData::ratio)
         .map(UnicodeWidthStr::width)
         .max()
         .unwrap_or(0);
