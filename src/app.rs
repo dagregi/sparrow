@@ -64,7 +64,7 @@ impl App {
             frame_rate,
             components: vec![
                 Box::new(SessionStat::new(client.clone())?),
-                Box::new(Home::new(client.clone())?),
+                Box::new(Home::new(client.clone(), None)?),
             ],
             should_quit: false,
             should_suspend: false,
@@ -173,7 +173,7 @@ impl App {
                 Action::ClearScreen => tui.terminal.clear()?,
                 Action::Resize(w, h) => self.handle_resize(tui, w, h)?,
                 Action::Render => self.render(tui)?,
-                Action::Mode(mode) => self.handle_modes(mode)?,
+                Action::Mode(mode, id) => self.handle_modes(mode, id)?,
                 _ => {}
             }
             for component in self.components.iter_mut() {
@@ -191,17 +191,17 @@ impl App {
         Ok(())
     }
 
-    fn handle_modes(&mut self, mode: Mode) -> Result<()> {
+    fn handle_modes(&mut self, mode: Mode, id: i64) -> Result<()> {
         match mode {
             Mode::Home => {
                 self.components.pop();
                 self.components
-                    .push(Box::new(Home::new(self.client.clone())?));
+                    .push(Box::new(Home::new(self.client.clone(), Some(id))?));
             }
             Mode::Properties => {
                 self.components.pop();
                 self.components
-                    .push(Box::new(Properties::new(self.client.clone())?));
+                    .push(Box::new(Properties::new(self.client.clone(), id)?));
             }
         }
         Ok(())

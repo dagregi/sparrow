@@ -62,7 +62,7 @@ impl Component for Properties {
     fn update(&mut self, action: Action) -> Result<Option<Action>> {
         match action {
             Action::Tick => {
-                self.data = match block_on(map_torrent_data(&self.client, 1)) {
+                self.data = match block_on(map_torrent_data(&self.client, self.data.id)) {
                     Ok(d) => d,
                     Err(err) => return Ok(Some(Action::Error(err.to_string()))),
                 };
@@ -78,8 +78,8 @@ impl Component for Properties {
             KeyCode::Char('q') => {
                 return Ok(Some(Action::Quit));
             }
-            KeyCode::Esc => {
-                return Ok(Some(Action::Mode(Mode::Home)));
+            KeyCode::Esc | KeyCode::Backspace => {
+                return Ok(Some(Action::Mode(Mode::Home, self.data.id)));
             }
             KeyCode::Char('l') | KeyCode::Right => {
                 self.next_tab();
@@ -97,8 +97,8 @@ impl Component for Properties {
 }
 
 impl Properties {
-    pub fn new(client: Rc<RefCell<TransClient>>) -> Result<Self> {
-        let data = block_on(map_torrent_data(&client, 1))?;
+    pub fn new(client: Rc<RefCell<TransClient>>, id: i64) -> Result<Self> {
+        let data = block_on(map_torrent_data(&client, id))?;
         Ok(Self {
             client,
             data,
@@ -184,6 +184,7 @@ async fn map_torrent_data(
                 .collect_vec();
 
             Some(TorrentData {
+                id: t.id?,
                 is_stalled: t.is_stalled?,
                 name: t.name?,
                 eta: convert_eta(t.eta?),
@@ -235,6 +236,7 @@ impl SelectedTab {
 }
 
 pub struct TorrentData {
+    id: i64,
     is_stalled: bool,
     name: String,
     percent_done: String,

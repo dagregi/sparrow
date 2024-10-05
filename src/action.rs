@@ -14,5 +14,5 @@ pub enum Action {
     ClearScreen,
     Error(String),
     Help,
-    Mode(Mode),
+    Mode(Mode, i64),
 }

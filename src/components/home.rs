@@ -41,11 +41,20 @@ pub struct Home {
 }
 
 impl Home {
-    pub fn new(client: Rc<RefCell<TransClient>>) -> Result<Self> {
+    pub fn new(client: Rc<RefCell<TransClient>>, id: Option<i64>) -> Result<Self> {
         let data_vec = block_on(get_torrent_data(&client))?;
+        let index = match id {
+            Some(id) => data_vec
+                .iter()
+                .enumerate()
+                .filter_map(|(i, d)| if d.id == id { Some(i) } else { None })
+                .next(),
+            None => Some(0),
+        };
+
         Ok(Self {
             client,
-            state: TableState::default().with_selected(0),
+            state: TableState::default().with_selected(index),
             longest_item_lens: constraint_len_calculator(&data_vec),
             colors: Colors::new(),
             scroll_state: ScrollbarState::new((data_vec.len()) * ITEM_HEIGHT),
@@ -220,7 +229,12 @@ impl Component for Home {
                 return Ok(Some(Action::Quit));
             }
             KeyCode::Char('l') | KeyCode::Enter => {
-                return Ok(Some(Action::Mode(Mode::Properties)));
+                let id = self
+                    .items
+                    .get(self.state.selected().ok_or(AppError::NoRowSelected)?)
+                    .ok_or(AppError::OutOfBound)?
+                    .id;
+                return Ok(Some(Action::Mode(Mode::Properties, id)));
             }
             KeyCode::Char('j') | KeyCode::Down => {
                 self.next();
