@@ -18,7 +18,7 @@ use super::Component;
 pub struct SessionStat {
     client: Rc<RefCell<TransClient>>,
     stats: SessionStats,
-    color: Colors,
+    colors: Colors,
 }
 
 impl Component for SessionStat {
@@ -50,7 +50,7 @@ impl SessionStat {
         Ok(Self {
             client,
             stats,
-            color: Colors::new(),
+            colors: Colors::new(),
         })
     }
 
@@ -63,12 +63,16 @@ impl SessionStat {
             stats.torrent_count
         );
         let info_footer = Paragraph::new(Line::from(stats_text))
-            .style(Style::new().fg(self.color.row_fg).bg(self.color.buffer_bg))
+            .style(
+                Style::new()
+                    .fg(self.colors.row_fg)
+                    .bg(self.colors.buffer_bg),
+            )
             .right_aligned()
             .block(
                 Block::bordered()
                     .border_type(BorderType::Double)
-                    .border_style(Style::new().fg(self.color.footer_border_color)),
+                    .border_style(Style::new().fg(self.colors.footer_border_color)),
             );
         frame.render_widget(info_footer, area);
     }

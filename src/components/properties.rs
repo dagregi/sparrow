@@ -84,9 +84,6 @@ impl Component for Properties {
             }
             KeyCode::Char('h') | KeyCode::Left => {
                 self.previous_tab();
-                if SelectedTab::Tracker == self.selected_tab {
-                    return Ok(Some(Action::ClearScreen));
-                }
             }
             _ => {}
         }
@@ -125,16 +122,19 @@ impl Properties {
         let tabs = Tabs::new(titles)
             .highlight_style(highlight_style)
             .select(selected_tab_index)
+            .bg(self.colors.buffer_bg)
             .padding("", "")
             .divider(" ");
 
-        let rects = Layout::vertical([Constraint::Min(2), Constraint::Percentage(100)]).split(area);
+        let rects = Layout::vertical([Constraint::Min(1), Constraint::Percentage(100)]).split(area);
 
         frame.render_widget(tabs, rects[0]);
         match self.selected_tab {
-            SelectedTab::Info => InfoTab::new(&self.data).render(frame, rects[1]),
+            SelectedTab::Info => InfoTab::new(&self.data, &self.colors).render(frame, rects[1]),
             SelectedTab::Peers => PeersTab::new(&self.data).render(frame, rects[1]),
-            SelectedTab::Tracker => TrackersTab::new(&self.data).render(frame, rects[1]),
+            SelectedTab::Tracker => {
+                TrackersTab::new(&self.data, &self.colors).render(frame, rects[1])
+            }
             SelectedTab::Files => FilesTab::new(&self.data).render(frame, rects[1]),
         }
     }
