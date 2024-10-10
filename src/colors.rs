@@ -9,6 +9,9 @@ pub struct Colors {
     pub normal_row_color: Color,
     pub alt_row_color: Color,
     pub footer_border_color: Color,
+
+    pub tab_title_bg: Color,
+    pub tab_selected: Color,
 }
 
 impl Colors {
@@ -24,6 +27,8 @@ impl Colors {
             normal_row_color: tailwind::SLATE.c950,
             alt_row_color: tailwind::SLATE.c900,
             footer_border_color: color.c400,
+            tab_title_bg: color.c900,
+            tab_selected: color.c400,
         }
     }
 }

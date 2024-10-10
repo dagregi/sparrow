@@ -1,4 +1,4 @@
-use transmission_rpc::types::TorrentStatus;
+use transmission_rpc::types::{Priority, TorrentStatus};
 
 pub fn convert_bytes(bytes: i64) -> String {
     ["B", "KB", "MB", "GB", "TB"]
@@ -23,6 +23,14 @@ pub fn handle_ratio(ratio: f32) -> String {
         "None".to_string()
     } else {
         format!("{ratio:.2}")
+    }
+}
+
+pub fn convert_priority(priority: Priority) -> String {
+    match priority {
+        Priority::Low => "Low".to_string(),
+        Priority::Normal => "Normal".to_string(),
+        Priority::High => "High".to_string(),
     }
 }
 
@@ -97,6 +105,13 @@ mod tests {
         assert_eq!(handle_ratio(0.0), "0.00");
         assert_eq!(handle_ratio(0.5), "0.50");
         assert_eq!(handle_ratio(1.0), "1.00");
+    }
+
+    #[test]
+    fn test_convert_priority() {
+        assert_eq!(convert_priority(Priority::Low), "Low");
+        assert_eq!(convert_priority(Priority::High), "High");
+        assert_eq!(convert_priority(Priority::Normal), "Normal");
     }
 
     #[test]

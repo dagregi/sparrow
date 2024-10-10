@@ -21,9 +21,10 @@ use unicode_width::UnicodeWidthStr;
 use super::Component;
 use crate::{
     action::Action,
+    app::{AppError, Mode},
     colors::Colors,
     config::Config,
-    utils::{convert_bytes, convert_eta, convert_percentage, convert_status, handle_ratio},
+    data::{map_torrent_data, TorrentData},
 };
 
 const ITEM_HEIGHT: usize = 4;
@@ -31,7 +32,7 @@ const ITEM_HEIGHT: usize = 4;
 pub struct Home {
     client: Rc<RefCell<TransClient>>,
     state: TableState,
-    items: Vec<Data>,
+    items: Vec<TorrentData>,
     longest_item_lens: (u16, u16, u16, u16, u16, u16),
     colors: Colors,
     scroll_state: ScrollbarState,
@@ -40,26 +41,39 @@ pub struct Home {
 }
 
 impl Home {
-    pub fn new(client: Rc<RefCell<TransClient>>) -> Self {
-        let data_vec = block_on(get_torrent_data(client.clone())).unwrap();
-        Self {
+    pub fn new(client: Rc<RefCell<TransClient>>, id: Option<i64>) -> Result<Self> {
+        let data_vec = block_on(map_torrent_data(&client, None))?;
+        let index = match id {
+            Some(id) => data_vec
+                .iter()
+                .enumerate()
+                .filter_map(|(i, d)| if d.id == id { Some(i) } else { None })
+                .next(),
+            None => Some(0),
+        };
+
+        Ok(Self {
             client,
-            state: TableState::default().with_selected(0),
+            state: TableState::default().with_selected(index),
             longest_item_lens: constraint_len_calculator(&data_vec),
             colors: Colors::new(),
             scroll_state: ScrollbarState::new((data_vec.len()) * ITEM_HEIGHT),
             items: data_vec,
             command_tx: None,
             config: Config::default(),
-        }
+        })
     }
 
     async fn toggle_state(&mut self) -> types::Result<()> {
-        let id = self.items.get(self.state.selected().unwrap()).unwrap().id;
+        let id = self
+            .items
+            .get(self.state.selected().ok_or(AppError::NoRowSelected)?)
+            .ok_or(AppError::OutOfBound)?
+            .id;
         let state = self
             .items
-            .get(self.state.selected().unwrap())
-            .unwrap()
+            .get(self.state.selected().ok_or(AppError::NoRowSelected)?)
+            .ok_or(AppError::OutOfBound)?
             .is_stalled;
         let mut client = self.client.borrow_mut();
         async move {
@@ -79,14 +93,14 @@ impl Home {
 
     async fn start_all(&mut self) -> types::Result<()> {
         let mut client = self.client.borrow_mut();
-        let ids = self.items.iter().map(|t| Id::Id(t.id)).collect::<Vec<Id>>();
+        let ids = self.items.iter().map(|t| Id::Id(t.id)).collect_vec();
         async move { client.torrent_action(TorrentAction::Start, ids).await }.await?;
         Ok(())
     }
 
     async fn stop_all(&mut self) -> types::Result<()> {
         let mut client = self.client.borrow_mut();
-        let ids = self.items.iter().map(|t| Id::Id(t.id)).collect::<Vec<Id>>();
+        let ids = self.items.iter().map(|t| Id::Id(t.id)).collect_vec();
         async move { client.torrent_action(TorrentAction::Stop, ids).await }.await?;
         Ok(())
     }
@@ -211,6 +225,17 @@ impl Component for Home {
 
     fn handle_key_event(&mut self, key_event: KeyEvent) -> Result<Option<Action>> {
         match key_event.code {
+            KeyCode::Char('q') => {
+                return Ok(Some(Action::Quit));
+            }
+            KeyCode::Char('l') | KeyCode::Enter => {
+                let id = self
+                    .items
+                    .get(self.state.selected().ok_or(AppError::NoRowSelected)?)
+                    .ok_or(AppError::OutOfBound)?
+                    .id;
+                return Ok(Some(Action::Mode(Mode::Properties, id)));
+            }
             KeyCode::Char('j') | KeyCode::Down => {
                 self.next();
             }
@@ -225,19 +250,19 @@ impl Component for Home {
             }
             KeyCode::Char('p') => {
                 match block_on(self.toggle_state()) {
-                    Ok(_) => {}
+                    Ok(()) => {}
                     Err(err) => return Ok(Some(Action::Error(err.to_string()))),
                 };
             }
             KeyCode::Char('s') => {
                 match block_on(self.start_all()) {
-                    Ok(_) => {}
+                    Ok(()) => {}
                     Err(err) => return Ok(Some(Action::Error(err.to_string()))),
                 };
             }
             KeyCode::Char('S') => {
                 match block_on(self.stop_all()) {
-                    Ok(_) => {}
+                    Ok(()) => {}
                     Err(err) => return Ok(Some(Action::Error(err.to_string()))),
                 };
             }
@@ -250,7 +275,7 @@ impl Component for Home {
     fn update(&mut self, action: Action) -> Result<Option<Action>> {
         match action {
             Action::Tick => {
-                self.items = match block_on(get_torrent_data(self.client.clone())) {
+                self.items = match block_on(map_torrent_data(&self.client, None)) {
                     Ok(items) => items,
                     Err(err) => return Ok(Some(Action::Error(err.to_string()))),
                 };
@@ -271,133 +296,41 @@ impl Component for Home {
     }
 }
 
-struct Data {
-    id: i64,
-    is_stalled: bool,
-    name: String,
-    done: String,
-    eta: String,
-    up: String,
-    down: String,
-    ratio: String,
-}
-
-impl Data {
-    const fn ref_array(&self) -> [&String; 6] {
-        [
-            &self.name,
-            &self.done,
-            &self.eta,
-            &self.down,
-            &self.up,
-            &self.ratio,
-        ]
-    }
-
-    fn name(&self) -> &str {
-        &self.name
-    }
-    fn done(&self) -> &str {
-        &self.done
-    }
-    fn eta(&self) -> &str {
-        &self.eta
-    }
-    fn up(&self) -> &str {
-        &self.up
-    }
-    fn down(&self) -> &str {
-        &self.down
-    }
-    fn ratio(&self) -> &str {
-        &self.ratio
-    }
-}
-
-async fn get_torrent_data(client: Rc<RefCell<TransClient>>) -> types::Result<Vec<Data>> {
-    let res = {
-        let mut client = client.borrow_mut();
-        async move { client.torrent_get(None, None).await }
-    }
-    .await;
-
-    let torrents = match res {
-        Ok(args) => args.arguments.torrents,
-        Err(err) => return Err(err),
-    };
-    Ok(torrents
-        .iter()
-        .filter_map(|t| -> Option<Data> {
-            let mut name = t.name.clone()?.to_string();
-            if name.len() > 80 {
-                name.truncate(80);
-                name.push_str("...");
-            }
-            let done = convert_percentage(t.percent_done?);
-            let eta = convert_eta(t.eta?);
-            let up = format!("{}/s", convert_bytes(t.rate_upload?));
-            let down = format!("{}/s", convert_bytes(t.rate_download?));
-            let ratio = handle_ratio(t.upload_ratio?);
-
-            let remianing = t.size_when_done? - t.left_until_done?;
-            let new = format!(
-                "{}\nStatus: {}    Have: {} of {}",
-                name,
-                convert_status(t.status?),
-                convert_bytes(remianing),
-                convert_bytes(t.size_when_done?),
-            );
-
-            Some(Data {
-                id: t.id?,
-                is_stalled: t.is_stalled?,
-                name: new,
-                done,
-                eta,
-                up,
-                down,
-                ratio,
-            })
-        })
-        .sorted_by(|a, b| a.name.cmp(&b.name))
-        .collect_vec())
-}
-
-fn constraint_len_calculator(items: &[Data]) -> (u16, u16, u16, u16, u16, u16) {
+fn constraint_len_calculator(items: &[TorrentData]) -> (u16, u16, u16, u16, u16, u16) {
     let name_len = items
         .iter()
-        .map(Data::name)
+        .map(TorrentData::formatted_name)
         .map(UnicodeWidthStr::width)
         .min()
         .unwrap_or(0);
     let done_len = items
         .iter()
-        .map(Data::done)
+        .map(TorrentData::percent_done)
         .flat_map(str::lines)
         .map(UnicodeWidthStr::width)
         .max()
         .unwrap_or(0);
     let eta_len = items
         .iter()
-        .map(Data::eta)
+        .map(TorrentData::eta)
         .map(UnicodeWidthStr::width)
         .max()
         .unwrap_or(0);
     let up_len = items
         .iter()
-        .map(Data::up)
+        .map(TorrentData::upload_speed)
         .map(UnicodeWidthStr::width)
         .max()
         .unwrap_or(0);
     let down_len = items
         .iter()
-        .map(Data::down)
+        .map(TorrentData::download_speed)
         .map(UnicodeWidthStr::width)
         .max()
         .unwrap_or(0);
     let ratio_len = items
         .iter()
-        .map(Data::ratio)
+        .map(TorrentData::ratio)
         .map(UnicodeWidthStr::width)
         .max()
         .unwrap_or(0);

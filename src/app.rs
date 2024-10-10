@@ -10,13 +10,33 @@ use transmission_rpc::TransClient;
 
 use crate::{
     action::Action,
-    components::{home::Home, session_stats::SessionStat, Component},
+    components::{home::Home, properties::Properties, session_stats::SessionStat, Component},
     config::Config,
     tui::{Event, Tui},
 };
 
+#[derive(Clone, Debug)]
+pub enum AppError {
+    OutOfBound,
+    NoRowSelected,
+    WithMessage(String),
+}
+
+impl std::fmt::Display for AppError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AppError::OutOfBound => write!(f, "Index out of bound"),
+            AppError::NoRowSelected => write!(f, "No row selected!"),
+            AppError::WithMessage(msg) => write!(f, "Message: {}", msg),
+        }
+    }
+}
+
+impl std::error::Error for AppError {}
+
 pub struct App {
     config: Config,
+    client: Rc<RefCell<TransClient>>,
     tick_rate: f64,
     frame_rate: f64,
     components: Vec<Box<dyn Component>>,
@@ -32,17 +52,19 @@ pub struct App {
 pub enum Mode {
     #[default]
     Home,
+    Properties,
 }
 
 impl App {
     pub fn new(tick_rate: f64, frame_rate: f64, client: &Rc<RefCell<TransClient>>) -> Result<Self> {
         let (action_tx, action_rx) = mpsc::unbounded_channel();
         Ok(Self {
+            client: client.clone(),
             tick_rate,
             frame_rate,
             components: vec![
-                Box::new(Home::new(client.clone())),
-                Box::new(SessionStat::new(client.clone())),
+                Box::new(SessionStat::new(client.clone())?),
+                Box::new(Home::new(client.clone(), None)?),
             ],
             should_quit: false,
             should_suspend: false,
@@ -151,6 +173,7 @@ impl App {
                 Action::ClearScreen => tui.terminal.clear()?,
                 Action::Resize(w, h) => self.handle_resize(tui, w, h)?,
                 Action::Render => self.render(tui)?,
+                Action::Mode(mode, id) => self.handle_modes(mode, id)?,
                 _ => {}
             }
             for component in self.components.iter_mut() {
@@ -165,6 +188,22 @@ impl App {
     fn handle_resize(&mut self, tui: &mut Tui, w: u16, h: u16) -> Result<()> {
         tui.resize(Rect::new(0, 0, w, h))?;
         self.render(tui)?;
+        Ok(())
+    }
+
+    fn handle_modes(&mut self, mode: Mode, id: i64) -> Result<()> {
+        match mode {
+            Mode::Home => {
+                self.components.pop();
+                self.components
+                    .push(Box::new(Home::new(self.client.clone(), Some(id))?));
+            }
+            Mode::Properties => {
+                self.components.pop();
+                self.components
+                    .push(Box::new(Properties::new(self.client.clone(), id)?));
+            }
+        }
         Ok(())
     }
 
