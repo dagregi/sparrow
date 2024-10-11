@@ -61,18 +61,20 @@ sparrow --username "user" --password "very_secret_password"
 
 -   Home
 
-| Key          | Description            |
-| :----------- | :--------------------- |
-| `j`          | Move down              |
-| `k`          | Move up                |
-| `l`, `enter` | Show info              |
-| `g`          | Goto top               |
-| `G`          | Goto bottom            |
-| `p`          | Start/stop torrent     |
-| `s`          | Start all torrents     |
-| `S`          | Stop all torrents      |
-| `q`          | Quit                   |
-| `Q`          | Quit and close session |
+| Key          | Description             |
+| :----------- | :---------------------- |
+| `j`          | Move down               |
+| `k`          | Move up                 |
+| `l`, `enter` | Show info               |
+| `g`          | Goto top                |
+| `G`          | Goto bottom             |
+| `d`          | Remove torrent          |
+| `D`          | Remove and delete files |
+| `p`          | Start/stop torrent      |
+| `s`          | Start all torrents      |
+| `S`          | Stop all torrents       |
+| `q`          | Quit                    |
+| `Q`          | Quit and close session  |
 
 -   Info
 

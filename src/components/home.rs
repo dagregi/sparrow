@@ -105,6 +105,18 @@ impl Home {
         Ok(())
     }
 
+    async fn remove_torrent(&mut self, with_files: bool) -> types::Result<()> {
+        let id = self
+            .items
+            .get(self.state.selected().ok_or(AppError::NoRowSelected)?)
+            .ok_or(AppError::OutOfBound)?
+            .id;
+        let mut client = self.client.borrow_mut();
+        async move { client.torrent_remove(vec![Id::Id(id)], with_files).await }.await?;
+
+        Ok(())
+    }
+
     fn next(&mut self) {
         let i = match self.state.selected() {
             Some(i) => {
@@ -272,6 +284,18 @@ impl Component for Home {
             }
             KeyCode::Char('S') => {
                 match block_on(self.stop_all()) {
+                    Ok(()) => {}
+                    Err(err) => return Ok(Some(Action::Error(err.to_string()))),
+                };
+            }
+            KeyCode::Char('d') => {
+                match block_on(self.remove_torrent(false)) {
+                    Ok(()) => {}
+                    Err(err) => return Ok(Some(Action::Error(err.to_string()))),
+                };
+            }
+            KeyCode::Char('D') => {
+                match block_on(self.remove_torrent(true)) {
                     Ok(()) => {}
                     Err(err) => return Ok(Some(Action::Error(err.to_string()))),
                 };
