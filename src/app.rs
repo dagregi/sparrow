@@ -192,14 +192,13 @@ impl App {
     }
 
     fn handle_modes(&mut self, mode: Mode, id: i64) -> Result<()> {
+        self.components.pop();
         match mode {
             Mode::Home => {
-                self.components.pop();
                 self.components
                     .push(Box::new(Home::new(self.client.clone(), Some(id))?));
             }
             Mode::Properties => {
-                self.components.pop();
                 self.components
                     .push(Box::new(Properties::new(self.client.clone(), id)?));
             }

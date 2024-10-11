@@ -10,14 +10,17 @@ use crate::colors::Colors;
 
 use super::TorrentData;
 
-pub struct InfoTab<'a> {
-    data: &'a TorrentData,
-    colors: &'a Colors,
+pub struct InfoTab {
+    data: TorrentData,
+    colors: Colors,
 }
 
-impl<'a> InfoTab<'a> {
-    pub fn new(data: &'a TorrentData, colors: &'a Colors) -> Self {
-        Self { data, colors }
+impl InfoTab {
+    pub fn new(data: &TorrentData) -> Self {
+        Self {
+            data: data.clone(),
+            colors: Colors::new(),
+        }
     }
 
     pub fn render(&self, frame: &mut Frame, area: Rect) {
