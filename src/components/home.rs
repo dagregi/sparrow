@@ -228,6 +228,16 @@ impl Component for Home {
             KeyCode::Char('q') => {
                 return Ok(Some(Action::Quit));
             }
+            KeyCode::Char('Q') => {
+                match block_on(close_session(&self.client)) {
+                    Ok(status) => {
+                        if status {
+                            return Ok(Some(Action::Quit));
+                        }
+                    }
+                    Err(err) => return Ok(Some(Action::Error(err.to_string()))),
+                };
+            }
             KeyCode::Char('l') | KeyCode::Enter => {
                 let id = self
                     .items
@@ -293,6 +303,19 @@ impl Component for Home {
         self.render_table(frame, rects[0]);
         self.render_scrollbar(frame, rects[0]);
         Ok(())
+    }
+}
+
+pub async fn close_session(client: &Rc<RefCell<TransClient>>) -> Result<bool, AppError> {
+    let res = {
+        let mut client = client.borrow_mut();
+        async move { client.session_close().await }
+    }
+    .await;
+
+    match res {
+        Ok(ss) => Ok(ss.is_ok()),
+        Err(err) => Err(AppError::WithMessage(err.to_string())),
     }
 }
 
