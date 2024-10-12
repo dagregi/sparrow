@@ -1,7 +1,7 @@
 use std::{cell::RefCell, rc::Rc};
 
 use color_eyre::Result;
-use crossterm::event::{KeyCode, KeyEvent};
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use futures::executor::block_on;
 use itertools::Itertools;
 use ratatui::{
@@ -28,6 +28,7 @@ use crate::{
 };
 
 const ITEM_HEIGHT: usize = 4;
+const SCROLL_SIZE: usize = 4;
 
 pub struct Home {
     client: Rc<RefCell<TransClient>>,
@@ -156,6 +157,20 @@ impl Home {
         self.state.select_last();
         self.scroll_state.last();
     }
+
+    fn scroll_up(&mut self, amount: usize) {
+        self.state.scroll_up_by(amount as u16);
+        self.scroll_state = self
+            .scroll_state
+            .position(self.state.selected().unwrap_or(0) * ITEM_HEIGHT);
+    }
+
+    fn scroll_down(&mut self, amount: usize) {
+        self.state.scroll_down_by(amount as u16);
+        self.scroll_state = self
+            .scroll_state
+            .position(self.state.selected().unwrap_or(0) * ITEM_HEIGHT);
+    }
 }
 
 impl Home {
@@ -269,6 +284,12 @@ impl Component for Home {
             }
             KeyCode::Char('G') => {
                 self.bottom();
+            }
+            KeyCode::Char('u') if key_event.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.scroll_up(SCROLL_SIZE);
+            }
+            KeyCode::Char('d') if key_event.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.scroll_down(SCROLL_SIZE);
             }
             KeyCode::Char('p') => {
                 match block_on(self.toggle_state()) {
