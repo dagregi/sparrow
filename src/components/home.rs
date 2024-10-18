@@ -1,7 +1,7 @@
 use std::{cell::RefCell, rc::Rc};
 
 use color_eyre::Result;
-use crossterm::event::{KeyCode, KeyEvent};
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use futures::executor::block_on;
 use itertools::Itertools;
 use ratatui::{
@@ -28,6 +28,7 @@ use crate::{
 };
 
 const ITEM_HEIGHT: usize = 4;
+const SCROLL_SIZE: usize = 4;
 
 pub struct Home {
     client: Rc<RefCell<TransClient>>,
@@ -105,6 +106,18 @@ impl Home {
         Ok(())
     }
 
+    async fn remove_torrent(&mut self, with_files: bool) -> types::Result<()> {
+        let id = self
+            .items
+            .get(self.state.selected().ok_or(AppError::NoRowSelected)?)
+            .ok_or(AppError::OutOfBound)?
+            .id;
+        let mut client = self.client.borrow_mut();
+        async move { client.torrent_remove(vec![Id::Id(id)], with_files).await }.await?;
+
+        Ok(())
+    }
+
     fn next(&mut self) {
         let i = match self.state.selected() {
             Some(i) => {
@@ -143,6 +156,20 @@ impl Home {
     fn bottom(&mut self) {
         self.state.select_last();
         self.scroll_state.last();
+    }
+
+    fn scroll_up(&mut self, amount: usize) {
+        self.state.scroll_up_by(amount as u16);
+        self.scroll_state = self
+            .scroll_state
+            .position(self.state.selected().unwrap_or(0) * ITEM_HEIGHT);
+    }
+
+    fn scroll_down(&mut self, amount: usize) {
+        self.state.scroll_down_by(amount as u16);
+        self.scroll_state = self
+            .scroll_state
+            .position(self.state.selected().unwrap_or(0) * ITEM_HEIGHT);
     }
 }
 
@@ -228,6 +255,16 @@ impl Component for Home {
             KeyCode::Char('q') => {
                 return Ok(Some(Action::Quit));
             }
+            KeyCode::Char('Q') => {
+                match block_on(close_session(&self.client)) {
+                    Ok(status) => {
+                        if status {
+                            return Ok(Some(Action::Quit));
+                        }
+                    }
+                    Err(err) => return Ok(Some(Action::Error(err.to_string()))),
+                };
+            }
             KeyCode::Char('l') | KeyCode::Enter => {
                 let id = self
                     .items
@@ -248,6 +285,12 @@ impl Component for Home {
             KeyCode::Char('G') => {
                 self.bottom();
             }
+            KeyCode::Char('u') if key_event.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.scroll_up(SCROLL_SIZE);
+            }
+            KeyCode::Char('d') if key_event.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.scroll_down(SCROLL_SIZE);
+            }
             KeyCode::Char('p') => {
                 match block_on(self.toggle_state()) {
                     Ok(()) => {}
@@ -262,6 +305,18 @@ impl Component for Home {
             }
             KeyCode::Char('S') => {
                 match block_on(self.stop_all()) {
+                    Ok(()) => {}
+                    Err(err) => return Ok(Some(Action::Error(err.to_string()))),
+                };
+            }
+            KeyCode::Char('d') => {
+                match block_on(self.remove_torrent(false)) {
+                    Ok(()) => {}
+                    Err(err) => return Ok(Some(Action::Error(err.to_string()))),
+                };
+            }
+            KeyCode::Char('D') => {
+                match block_on(self.remove_torrent(true)) {
                     Ok(()) => {}
                     Err(err) => return Ok(Some(Action::Error(err.to_string()))),
                 };
@@ -293,6 +348,19 @@ impl Component for Home {
         self.render_table(frame, rects[0]);
         self.render_scrollbar(frame, rects[0]);
         Ok(())
+    }
+}
+
+pub async fn close_session(client: &Rc<RefCell<TransClient>>) -> Result<bool, AppError> {
+    let res = {
+        let mut client = client.borrow_mut();
+        async move { client.session_close().await }
+    }
+    .await;
+
+    match res {
+        Ok(ss) => Ok(ss.is_ok()),
+        Err(err) => Err(AppError::WithMessage(err.to_string())),
     }
 }
 
