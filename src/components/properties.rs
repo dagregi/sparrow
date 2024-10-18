@@ -1,11 +1,11 @@
 use std::{cell::RefCell, rc::Rc};
 
 use color_eyre::Result;
-use crossterm::event::{KeyCode, KeyEvent};
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use files::FilesTab;
 use futures::executor::block_on;
 use info::InfoTab;
-use peers::PeersTab;
+// use peers::PeersTab;
 use ratatui::{
     layout::{Constraint, Layout, Rect},
     style::{palette::tailwind, Modifier, Style, Stylize},
@@ -26,6 +26,8 @@ use crate::{
 
 use super::Component;
 
+const SCROLL_SIZE: usize = 4;
+
 pub mod files;
 pub mod info;
 pub mod peers;
@@ -35,6 +37,9 @@ pub struct Properties {
     client: Rc<RefCell<TransClient>>,
     data: TorrentData,
     selected_tab: SelectedTab,
+    info_tab: InfoTab,
+    tracker_tab: TrackersTab,
+    files_tab: FilesTab,
     colors: Colors,
 }
 
@@ -43,8 +48,8 @@ enum SelectedTab {
     #[default]
     #[strum(to_string = "Info")]
     Info,
-    #[strum(to_string = "Peers")]
-    Peers,
+    // #[strum(to_string = "Peers")]
+    // Peers,
     #[strum(to_string = "Tracker")]
     Tracker,
     #[strum(to_string = "Files")]
@@ -85,6 +90,29 @@ impl Component for Properties {
             KeyCode::Char('h') | KeyCode::Left => {
                 self.previous_tab();
             }
+            KeyCode::Char('j') | KeyCode::Down => {
+                self.next();
+            }
+            KeyCode::Char('k') | KeyCode::Up => {
+                self.previous();
+            }
+            KeyCode::Char('g') | KeyCode::Home => {
+                self.top();
+            }
+            KeyCode::Char('G') | KeyCode::End => {
+                self.bottom();
+            }
+            KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.scroll_up(SCROLL_SIZE);
+            }
+            KeyCode::Char('d') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.scroll_down(SCROLL_SIZE);
+            }
+            KeyCode::Enter => {
+                if self.selected_tab == SelectedTab::Files {
+                    self.files_tab.toggle()
+                }
+            }
             _ => {}
         }
         Ok(None)
@@ -99,21 +127,72 @@ impl Properties {
             .clone();
         Ok(Self {
             client,
+            info_tab: InfoTab::new(&data),
+            tracker_tab: TrackersTab::new(&data),
+            files_tab: FilesTab::new(&data),
             data,
             selected_tab: SelectedTab::Info,
             colors: Colors::new(),
         })
     }
 
-    pub fn next_tab(&mut self) {
+    fn next_tab(&mut self) {
         self.selected_tab = self.selected_tab.next();
     }
 
-    pub fn previous_tab(&mut self) {
+    fn previous_tab(&mut self) {
         self.selected_tab = self.selected_tab.previous();
     }
 
-    fn render_tabs(&self, frame: &mut Frame, area: Rect) {
+    fn next(&mut self) {
+        match self.selected_tab {
+            SelectedTab::Tracker => self.tracker_tab.next(),
+            SelectedTab::Files => self.files_tab.down(),
+            _ => {}
+        }
+    }
+
+    fn previous(&mut self) {
+        match self.selected_tab {
+            SelectedTab::Tracker => self.tracker_tab.previous(),
+            SelectedTab::Files => self.files_tab.up(),
+            _ => {}
+        }
+    }
+
+    fn top(&mut self) {
+        match self.selected_tab {
+            SelectedTab::Tracker => self.tracker_tab.top(),
+            SelectedTab::Files => self.files_tab.top(),
+            _ => {}
+        }
+    }
+
+    fn bottom(&mut self) {
+        match self.selected_tab {
+            SelectedTab::Tracker => self.tracker_tab.bottom(),
+            SelectedTab::Files => self.files_tab.bottom(),
+            _ => {}
+        }
+    }
+
+    fn scroll_down(&mut self, amount: usize) {
+        match self.selected_tab {
+            SelectedTab::Tracker => self.tracker_tab.scroll_down(amount),
+            SelectedTab::Files => self.files_tab.scroll_down(amount),
+            _ => {}
+        }
+    }
+
+    fn scroll_up(&mut self, amount: usize) {
+        match self.selected_tab {
+            SelectedTab::Tracker => self.tracker_tab.scroll_up(amount),
+            SelectedTab::Files => self.files_tab.scroll_up(amount),
+            _ => {}
+        }
+    }
+
+    fn render_tabs(&mut self, frame: &mut Frame, area: Rect) {
         let titles = SelectedTab::iter().map(SelectedTab::title);
         let highlight_style = Style::default()
             .add_modifier(Modifier::REVERSED)
@@ -130,12 +209,9 @@ impl Properties {
 
         frame.render_widget(tabs, rects[0]);
         match self.selected_tab {
-            SelectedTab::Info => InfoTab::new(&self.data, &self.colors).render(frame, rects[1]),
-            SelectedTab::Peers => PeersTab::new(&self.data).render(frame, rects[1]),
-            SelectedTab::Tracker => {
-                TrackersTab::new(&self.data, &self.colors).render(frame, rects[1])
-            }
-            SelectedTab::Files => FilesTab::new(&self.data).render(frame, rects[1]),
+            SelectedTab::Info => self.info_tab.render(frame, rects[1]),
+            SelectedTab::Tracker => self.tracker_tab.render(frame, rects[1]),
+            SelectedTab::Files => self.files_tab.render(frame, rects[1]),
         }
     }
 }
