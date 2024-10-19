@@ -68,6 +68,8 @@ sparrow --username "user" --password "very_secret_password"
 | `l`, `enter` | Show info               |
 | `g`          | Goto top                |
 | `G`          | Goto bottom             |
+| `<Ctrl-d>`   | Scroll half a page down |
+| `<Ctrl-u>`   | Scroll half a page up   |
 | `d`          | Remove torrent          |
 | `D`          | Remove and delete files |
 | `p`          | Start/stop torrent      |
