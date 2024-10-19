@@ -24,7 +24,7 @@ use crate::{
     data::{map_torrent_data, TorrentData},
 };
 
-use super::Component;
+use super::{home::close_session, Component};
 
 pub mod files;
 pub mod info;
@@ -75,6 +75,16 @@ impl Component for Properties {
         match key.code {
             KeyCode::Char('q') => {
                 return Ok(Some(Action::Quit));
+            }
+            KeyCode::Char('Q') => {
+                match block_on(close_session(&self.client)) {
+                    Ok(status) => {
+                        if status {
+                            return Ok(Some(Action::Quit));
+                        }
+                    }
+                    Err(err) => return Ok(Some(Action::Error(err.to_string()))),
+                };
             }
             KeyCode::Esc | KeyCode::Backspace => {
                 return Ok(Some(Action::Mode(Mode::Home, self.data.id)));
