@@ -17,12 +17,6 @@ pub struct FilesTab {
     colors: Colors,
 }
 
-enum Node {
-    Directory(String, Box<Node>),
-    File(String),
-}
-use Node::*;
-
 impl FilesTab {
     pub fn new(data: &TorrentData) -> Self {
         Self {
@@ -67,16 +61,13 @@ impl FilesTab {
             .add_modifier(Modifier::REVERSED)
             .fg(self.colors.selected_style_fg);
 
-        let items = self
-            .data
-            .files
-            .iter()
-            .map(|file| {
-                let mut paths = file.name.split('/').rev().collect_vec();
-                let len = paths.len();
-                map_node(&parse_node(&mut paths, len))
-            })
-            .collect_vec();
+        let items = map_node(&parse_node(
+            self.data
+                .files
+                .iter()
+                .map(|f| f.name.as_str())
+                .collect_vec(),
+        ));
 
         let tree = Tree::new(&items)
             .expect("unique identifier")
@@ -88,26 +79,60 @@ impl FilesTab {
     }
 }
 
-fn map_node(node: &Node) -> TreeItem<'static, String> {
-    let mut children = Vec::new();
-    match node {
-        Directory(name, node) => {
-            children.push(map_node(node));
-            TreeItem::new(name.to_string(), name.to_string(), children).expect("unique identifier")
-        }
-        File(name) => TreeItem::new_leaf(name.to_string(), name.to_string()),
-    }
+fn map_node(nodes: &[Node]) -> Vec<TreeItem<'static, String>> {
+    nodes
+        .iter()
+        .map(|node| match node {
+            Node::File(name) => TreeItem::new_leaf(name.to_string(), name.to_string()),
+            Node::Directory(name, children) => {
+                TreeItem::new(name.to_string(), name.to_string(), map_node(children))
+                    .expect("unique identifier")
+            }
+        })
+        .collect_vec()
 }
 
-fn parse_node(input: &mut Vec<&str>, len: usize) -> Node {
-    if len > 1 {
-        let dir_name = input.pop().unwrap();
-        Directory(
-            dir_name.to_string(),
-            Box::new(parse_node(input, input.len())),
-        )
+#[derive(Debug, Clone)]
+enum Node {
+    File(String),
+    Directory(String, Vec<Node>),
+}
+
+fn parse_node(paths: Vec<&str>) -> Vec<Node> {
+    let mut nodes: Vec<Node> = Vec::new();
+    for path in paths {
+        insert_into_tree(&mut nodes, &path.split('/').collect::<Vec<&str>>());
+    }
+
+    nodes
+}
+
+fn insert_into_tree(children: &mut Vec<Node>, parts: &[&str]) {
+    if parts.is_empty() {
+        return;
+    }
+
+    let Some((current_part, remaining_parts)) = parts.split_first() else {
+        return;
+    };
+
+    if remaining_parts.is_empty() {
+        children.push(Node::File((*current_part).to_string()));
+        return;
+    }
+
+    if let Some(existing_dir) = children
+        .iter_mut()
+        .find(|n| matches!(n, Node::Directory(d_name, _) if d_name == current_part))
+    {
+        if let Node::Directory(_, children) = existing_dir {
+            insert_into_tree(children, remaining_parts);
+        }
     } else {
-        let file_name = input.first().unwrap();
-        File(file_name.to_string())
+        let new_dir = Node::Directory((*current_part).to_string(), Vec::new());
+        children.push(new_dir);
+        if let Node::Directory(_, children) = children.last_mut().unwrap() {
+            insert_into_tree(children, remaining_parts);
+        }
     }
 }
