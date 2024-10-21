@@ -21,10 +21,10 @@ use unicode_width::UnicodeWidthStr;
 use super::Component;
 use crate::{
     action::Action,
-    app::{AppError, Mode},
+    app::{self, Mode},
     colors::Colors,
     config::Config,
-    data::{map_torrent_data, TorrentData},
+    data::{self, map_torrent_data},
 };
 
 const ITEM_HEIGHT: usize = 4;
@@ -32,7 +32,7 @@ const ITEM_HEIGHT: usize = 4;
 pub struct Home {
     client: Rc<RefCell<TransClient>>,
     state: TableState,
-    items: Vec<TorrentData>,
+    items: Vec<data::Torrent>,
     longest_item_lens: (u16, u16, u16, u16, u16, u16),
     colors: Colors,
     scroll_state: ScrollbarState,
@@ -44,11 +44,12 @@ impl Home {
     pub fn new(client: Rc<RefCell<TransClient>>, id: Option<i64>) -> Result<Self> {
         let data_vec = block_on(map_torrent_data(&client, None))?;
         let index = match id {
-            Some(id) => data_vec
-                .iter()
-                .enumerate()
-                .filter_map(|(i, d)| if d.id == id { Some(i) } else { None })
-                .next(),
+            Some(id) => {
+                data_vec
+                    .iter()
+                    .enumerate()
+                    .find_map(|(i, d)| if d.id == id { Some(i) } else { None })
+            }
             None => Some(0),
         };
 
@@ -67,13 +68,13 @@ impl Home {
     async fn toggle_state(&mut self) -> types::Result<()> {
         let id = self
             .items
-            .get(self.state.selected().ok_or(AppError::NoRowSelected)?)
-            .ok_or(AppError::OutOfBound)?
+            .get(self.state.selected().ok_or(app::Error::NoRowSelected)?)
+            .ok_or(app::Error::OutOfBound)?
             .id;
         let state = self
             .items
-            .get(self.state.selected().ok_or(AppError::NoRowSelected)?)
-            .ok_or(AppError::OutOfBound)?
+            .get(self.state.selected().ok_or(app::Error::NoRowSelected)?)
+            .ok_or(app::Error::OutOfBound)?
             .is_stalled;
         let mut client = self.client.borrow_mut();
         async move {
@@ -231,8 +232,8 @@ impl Component for Home {
             KeyCode::Char('l') | KeyCode::Enter => {
                 let id = self
                     .items
-                    .get(self.state.selected().ok_or(AppError::NoRowSelected)?)
-                    .ok_or(AppError::OutOfBound)?
+                    .get(self.state.selected().ok_or(app::Error::NoRowSelected)?)
+                    .ok_or(app::Error::OutOfBound)?
                     .id;
                 return Ok(Some(Action::Mode(Mode::Properties, id)));
             }
@@ -296,41 +297,41 @@ impl Component for Home {
     }
 }
 
-fn constraint_len_calculator(items: &[TorrentData]) -> (u16, u16, u16, u16, u16, u16) {
+fn constraint_len_calculator(items: &[data::Torrent]) -> (u16, u16, u16, u16, u16, u16) {
     let name_len = items
         .iter()
-        .map(TorrentData::formatted_name)
+        .map(data::Torrent::formatted_name)
         .map(UnicodeWidthStr::width)
         .min()
         .unwrap_or(0);
     let done_len = items
         .iter()
-        .map(TorrentData::percent_done)
+        .map(data::Torrent::percent_done)
         .flat_map(str::lines)
         .map(UnicodeWidthStr::width)
         .max()
         .unwrap_or(0);
     let eta_len = items
         .iter()
-        .map(TorrentData::eta)
+        .map(data::Torrent::eta)
         .map(UnicodeWidthStr::width)
         .max()
         .unwrap_or(0);
     let up_len = items
         .iter()
-        .map(TorrentData::upload_speed)
+        .map(data::Torrent::upload_speed)
         .map(UnicodeWidthStr::width)
         .max()
         .unwrap_or(0);
     let down_len = items
         .iter()
-        .map(TorrentData::download_speed)
+        .map(data::Torrent::download_speed)
         .map(UnicodeWidthStr::width)
         .max()
         .unwrap_or(0);
     let ratio_len = items
         .iter()
-        .map(TorrentData::ratio)
+        .map(data::Torrent::ratio)
         .map(UnicodeWidthStr::width)
         .max()
         .unwrap_or(0);

@@ -2,10 +2,7 @@ use std::{cell::RefCell, rc::Rc};
 
 use color_eyre::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use files::FilesTab;
 use futures::executor::block_on;
-use info::InfoTab;
-// use peers::PeersTab;
 use ratatui::{
     layout::{Constraint, Layout, Rect},
     style::{palette::tailwind, Modifier, Style, Stylize},
@@ -14,14 +11,13 @@ use ratatui::{
     Frame,
 };
 use strum::{Display, EnumIter, FromRepr, IntoEnumIterator};
-use trackers::TrackersTab;
 use transmission_rpc::TransClient;
 
 use crate::{
     action::Action,
-    app::{AppError, Mode},
+    app::{self, Mode},
     colors::Colors,
-    data::{map_torrent_data, TorrentData},
+    data::{self, map_torrent_data},
 };
 
 use super::Component;
@@ -35,11 +31,11 @@ pub mod trackers;
 
 pub struct Properties {
     client: Rc<RefCell<TransClient>>,
-    data: TorrentData,
+    data: data::Torrent,
     selected_tab: SelectedTab,
-    info_tab: InfoTab,
-    tracker_tab: TrackersTab,
-    files_tab: FilesTab,
+    info_tab: info::Tab,
+    tracker_tab: trackers::Tab,
+    files_tab: files::Tab,
     colors: Colors,
 }
 
@@ -66,7 +62,7 @@ impl Component for Properties {
         match action {
             Action::Tick => {
                 self.data = match block_on(map_torrent_data(&self.client, Some(self.data.id))) {
-                    Ok(d) => d.first().ok_or(AppError::OutOfBound)?.clone(),
+                    Ok(d) => d.first().ok_or(app::Error::OutOfBound)?.clone(),
                     Err(err) => return Ok(Some(Action::Error(err.to_string()))),
                 };
             }
@@ -110,7 +106,7 @@ impl Component for Properties {
             }
             KeyCode::Enter => {
                 if self.selected_tab == SelectedTab::Files {
-                    self.files_tab.toggle()
+                    self.files_tab.toggle();
                 }
             }
             _ => {}
@@ -123,13 +119,13 @@ impl Properties {
     pub fn new(client: Rc<RefCell<TransClient>>, id: i64) -> Result<Self> {
         let data = block_on(map_torrent_data(&client, Some(id)))?
             .first()
-            .ok_or(AppError::OutOfBound)?
+            .ok_or(app::Error::OutOfBound)?
             .clone();
         Ok(Self {
             client,
-            info_tab: InfoTab::new(&data),
-            tracker_tab: TrackersTab::new(&data),
-            files_tab: FilesTab::new(&data),
+            info_tab: info::Tab::new(&data),
+            tracker_tab: trackers::Tab::new(&data),
+            files_tab: files::Tab::new(&data),
             data,
             selected_tab: SelectedTab::Info,
             colors: Colors::new(),

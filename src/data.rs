@@ -6,15 +6,15 @@ use itertools::Itertools;
 use transmission_rpc::{types::Id, TransClient};
 
 use crate::{
-    app::AppError,
+    app,
     utils::{
         convert_bytes, convert_eta, convert_percentage, convert_priority, convert_status,
         handle_ratio,
     },
 };
 
-#[derive(Clone)]
-pub struct TorrentData {
+#[derive(Debug, Clone)]
+pub struct Torrent {
     pub id: i64,
     pub is_stalled: bool,
     pub status: String,
@@ -35,19 +35,19 @@ pub struct TorrentData {
     pub eta: String,
     pub error: String,
 
-    pub trackers: Vec<TrackerData>,
-    pub files: Vec<FilesData>,
+    pub trackers: Vec<Tracker>,
+    pub files: Vec<Files>,
 }
 
-#[derive(Clone)]
-pub struct TrackerData {
+#[derive(Debug, Clone)]
+pub struct Tracker {
     pub host: String,
     pub is_backup: bool,
     pub next_announce: DateTime<Utc>,
 }
 
-#[derive(Clone)]
-pub struct FilesData {
+#[derive(Debug, Clone)]
+pub struct Files {
     pub name: String,
     pub downloaded: String,
     pub total_size: String,
@@ -55,7 +55,7 @@ pub struct FilesData {
     pub wanted: bool,
 }
 
-impl TorrentData {
+impl Torrent {
     pub const fn ref_array(&self) -> [&String; 6] {
         [
             &self.formatted_name,
@@ -90,7 +90,7 @@ impl TorrentData {
 pub async fn map_torrent_data(
     client: &Rc<RefCell<TransClient>>,
     id: Option<i64>,
-) -> Result<Vec<TorrentData>, AppError> {
+) -> Result<Vec<Torrent>, app::Error> {
     let res = {
         let mut client = client.borrow_mut();
         async move {
@@ -104,7 +104,7 @@ pub async fn map_torrent_data(
 
     let torrents = match res {
         Ok(t) => t.arguments.torrents,
-        Err(err) => return Err(AppError::WithMessage(err.to_string())),
+        Err(err) => return Err(app::Error::WithMessage(err.to_string())),
     };
 
     Ok(torrents
@@ -114,7 +114,7 @@ pub async fn map_torrent_data(
             let trackers = t
                 .tracker_stats?
                 .iter()
-                .map(|tr| TrackerData {
+                .map(|tr| Tracker {
                     host: tr.host.to_string(),
                     is_backup: tr.is_backup,
                     next_announce: tr.next_announce_time,
@@ -126,11 +126,11 @@ pub async fn map_torrent_data(
                 .enumerate()
                 .filter_map(|(i, f)| {
                     let file_stats = t.file_stats.clone()?;
-                    Some(FilesData {
+                    Some(Files {
                         name: f.name.to_string(),
                         downloaded: convert_bytes(f.bytes_completed),
                         total_size: convert_bytes(f.length),
-                        priority: convert_priority(file_stats.get(i)?.priority.clone()),
+                        priority: convert_priority(&file_stats.get(i)?.priority),
                         wanted: file_stats.get(i)?.wanted,
                     })
                 })
@@ -144,12 +144,10 @@ pub async fn map_torrent_data(
             let status = convert_status(t.status?);
             let downloaded = convert_bytes(t.size_when_done? - t.left_until_done?);
             let size_done = convert_bytes(t.size_when_done?);
-            let formatted_name = format!(
-                "{}\nStatus: {}    Have: {} of {}",
-                raw_name, status, downloaded, size_done
-            );
+            let formatted_name =
+                format!("{raw_name}\nStatus: {status}    Have: {downloaded} of {size_done}");
 
-            Some(TorrentData {
+            Some(Torrent {
                 id: t.id?,
                 is_stalled: t.is_stalled?,
                 status,

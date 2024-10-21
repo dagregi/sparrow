@@ -9,21 +9,19 @@ use ratatui::{
     Frame,
 };
 
-use crate::colors::Colors;
-
-use super::TorrentData;
+use crate::{colors::Colors, data};
 
 const ITEM_HEIGHT: usize = 4;
 
-pub struct TrackersTab {
-    data: TorrentData,
+pub struct Tab {
+    data: data::Torrent,
     colors: Colors,
     state: ListState,
     scroll_state: ScrollbarState,
 }
 
-impl TrackersTab {
-    pub fn new(data: &TorrentData) -> Self {
+impl Tab {
+    pub fn new(data: &data::Torrent) -> Self {
         Self {
             data: data.clone(),
             colors: Colors::new(),
@@ -73,14 +71,16 @@ impl TrackersTab {
     }
 
     pub fn scroll_up(&mut self, amount: usize) {
-        self.state.scroll_up_by(amount as u16);
+        self.state
+            .scroll_up_by(u16::try_from(amount).expect("failed to parse"));
         self.scroll_state = self
             .scroll_state
             .position(self.state.selected().unwrap_or(0) * amount);
     }
 
     pub fn scroll_down(&mut self, amount: usize) {
-        self.state.scroll_down_by(amount as u16);
+        self.state
+            .scroll_down_by(u16::try_from(amount).expect("failed to parse"));
         self.scroll_state = self
             .scroll_state
             .position(self.state.selected().unwrap_or(0) * amount);

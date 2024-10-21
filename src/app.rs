@@ -16,23 +16,23 @@ use crate::{
 };
 
 #[derive(Clone, Debug)]
-pub enum AppError {
+pub enum Error {
     OutOfBound,
     NoRowSelected,
     WithMessage(String),
 }
 
-impl std::fmt::Display for AppError {
+impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            AppError::OutOfBound => write!(f, "Index out of bound"),
-            AppError::NoRowSelected => write!(f, "No row selected!"),
-            AppError::WithMessage(msg) => write!(f, "Message: {}", msg),
+            Error::OutOfBound => write!(f, "Index out of bound"),
+            Error::NoRowSelected => write!(f, "No row selected!"),
+            Error::WithMessage(msg) => write!(f, "Message: {msg}"),
         }
     }
 }
 
-impl std::error::Error for AppError {}
+impl std::error::Error for Error {}
 
 pub struct App {
     config: Config,
