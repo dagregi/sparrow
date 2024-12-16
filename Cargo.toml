@@ -49,6 +49,7 @@ tracing = "0.1.40"
 tracing-error = "0.2.0"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter", "serde"] }
 transmission-rpc = "0.4.3"
+tui-tree-widget = "0.22.0"
 unicode-width = "0.1.13"
 
 [build-dependencies]

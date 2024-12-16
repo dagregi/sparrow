@@ -9,25 +9,81 @@ use ratatui::{
     Frame,
 };
 
-use crate::colors::Colors;
+use crate::{colors::Colors, data};
 
-use super::TorrentData;
+const ITEM_HEIGHT: usize = 4;
 
-pub struct TrackersTab<'a> {
-    data: &'a TorrentData,
-    colors: &'a Colors,
+pub struct Tab {
+    data: data::Torrent,
+    colors: Colors,
     state: ListState,
     scroll_state: ScrollbarState,
 }
 
-impl<'a> TrackersTab<'a> {
-    pub fn new(data: &'a TorrentData, colors: &'a Colors) -> Self {
+impl Tab {
+    pub fn new(data: &data::Torrent) -> Self {
         Self {
-            data,
-            colors,
+            data: data.clone(),
+            colors: Colors::new(),
             state: ListState::default().with_selected(Some(0)),
-            scroll_state: ScrollbarState::new((data.trackers.len()) * 4),
+            scroll_state: ScrollbarState::new((data.trackers.len()) * ITEM_HEIGHT),
         }
+    }
+
+    pub fn next(&mut self) {
+        let i = match self.state.selected() {
+            Some(i) => {
+                if i >= self.data.trackers.len() - 1 {
+                    0
+                } else {
+                    i + 1
+                }
+            }
+            None => 0,
+        };
+        self.state.select(Some(i));
+        self.scroll_state = self.scroll_state.position(i * ITEM_HEIGHT);
+    }
+
+    pub fn previous(&mut self) {
+        let i = match self.state.selected() {
+            Some(i) => {
+                if i == 0 {
+                    self.data.trackers.len() - 1
+                } else {
+                    i - 1
+                }
+            }
+            None => 0,
+        };
+        self.state.select(Some(i));
+        self.scroll_state = self.scroll_state.position(i * ITEM_HEIGHT);
+    }
+
+    pub fn top(&mut self) {
+        self.state.select_first();
+        self.scroll_state.first();
+    }
+
+    pub fn bottom(&mut self) {
+        self.state.select_last();
+        self.scroll_state.last();
+    }
+
+    pub fn scroll_up(&mut self, amount: usize) {
+        self.state
+            .scroll_up_by(u16::try_from(amount).expect("failed to parse"));
+        self.scroll_state = self
+            .scroll_state
+            .position(self.state.selected().unwrap_or(0) * amount);
+    }
+
+    pub fn scroll_down(&mut self, amount: usize) {
+        self.state
+            .scroll_down_by(u16::try_from(amount).expect("failed to parse"));
+        self.scroll_state = self
+            .scroll_state
+            .position(self.state.selected().unwrap_or(0) * amount);
     }
 
     pub fn render(&mut self, frame: &mut Frame, area: Rect) {

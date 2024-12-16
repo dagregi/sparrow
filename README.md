@@ -80,18 +80,18 @@ sparrow --username "user" --password "very_secret_password"
 
 -   Info
 
-| Key   | Description            |
-| :---- | :--------------------- |
-| `l`   | Next tab               |
-| `h`   | Previous tab           |
-| `Esc` | Go back                |
-| `q`   | Quit                   |
-| `Q`   | Quit and close session |
+| Key                | Description            |
+| :----------------- | :--------------------- |
+| `l`                | Next tab               |
+| `h`                | Previous tab           |
+| `Esc`, `Backspace` | Go back                |
+| `q`                | Quit                   |
+| `Q`                | Quit and close session |
 
 ## TODO
 
 -   [x] Add a component to show torrent information
--   [x] Better error handling
+-   [ ] Better error handling
 -   [ ] Filter/Search for torrents in the list
 -   [ ] Add a help modal/page to show keybindings
 -   [ ] File viewer for the torrents

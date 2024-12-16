@@ -1,18 +1,18 @@
 #![allow(dead_code)]
 use ratatui::{layout::Rect, widgets::Paragraph, Frame};
 
-use super::TorrentData;
+use crate::data;
 
-pub struct PeersTab<'a> {
-    data: &'a TorrentData,
+pub struct Tab {
+    data: data::Torrent,
 }
 
-impl<'a> PeersTab<'a> {
-    pub fn new(data: &'a TorrentData) -> Self {
-        Self { data }
+impl Tab {
+    pub fn new(data: &data::Torrent) -> Self {
+        Self { data: data.clone() }
     }
 
-    pub fn render(self, frame: &mut Frame, area: Rect) {
+    pub fn render(&mut self, frame: &mut Frame, area: Rect) {
         frame.render_widget(Paragraph::new("Under Construction"), area);
     }
 }

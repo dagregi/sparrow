@@ -6,18 +6,19 @@ use ratatui::{
     Frame,
 };
 
-use crate::colors::Colors;
+use crate::{colors::Colors, data};
 
-use super::TorrentData;
-
-pub struct InfoTab<'a> {
-    data: &'a TorrentData,
-    colors: &'a Colors,
+pub struct Tab {
+    data: data::Torrent,
+    colors: Colors,
 }
 
-impl<'a> InfoTab<'a> {
-    pub fn new(data: &'a TorrentData, colors: &'a Colors) -> Self {
-        Self { data, colors }
+impl Tab {
+    pub fn new(data: &data::Torrent) -> Self {
+        Self {
+            data: data.clone(),
+            colors: Colors::new(),
+        }
     }
 
     pub fn render(&self, frame: &mut Frame, area: Rect) {

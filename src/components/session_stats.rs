@@ -11,7 +11,7 @@ use ratatui::{
 };
 use transmission_rpc::{types::SessionStats, TransClient};
 
-use crate::{action::Action, app::AppError, colors::Colors, utils::convert_bytes};
+use crate::{action::Action, app, colors::Colors, utils::convert_bytes};
 
 use super::Component;
 
@@ -78,7 +78,7 @@ impl SessionStat {
     }
 }
 
-async fn get_stats(client: Rc<RefCell<TransClient>>) -> Result<SessionStats, AppError> {
+async fn get_stats(client: Rc<RefCell<TransClient>>) -> Result<SessionStats, app::Error> {
     let res = {
         let mut client = client.borrow_mut();
         async move { client.session_stats().await }
@@ -87,6 +87,6 @@ async fn get_stats(client: Rc<RefCell<TransClient>>) -> Result<SessionStats, App
 
     match res {
         Ok(stats) => Ok(stats.arguments),
-        Err(err) => Err(AppError::WithMessage(err.to_string())),
+        Err(err) => Err(app::Error::WithMessage(err.to_string())),
     }
 }

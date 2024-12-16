@@ -26,7 +26,7 @@ pub fn handle_ratio(ratio: f32) -> String {
     }
 }
 
-pub fn convert_priority(priority: Priority) -> String {
+pub fn convert_priority(priority: &Priority) -> String {
     match priority {
         Priority::Low => "Low".to_string(),
         Priority::Normal => "Normal".to_string(),
@@ -109,9 +109,9 @@ mod tests {
 
     #[test]
     fn test_convert_priority() {
-        assert_eq!(convert_priority(Priority::Low), "Low");
-        assert_eq!(convert_priority(Priority::High), "High");
-        assert_eq!(convert_priority(Priority::Normal), "Normal");
+        assert_eq!(convert_priority(&Priority::Low), "Low");
+        assert_eq!(convert_priority(&Priority::High), "High");
+        assert_eq!(convert_priority(&Priority::Normal), "Normal");
     }
 
     #[test]
