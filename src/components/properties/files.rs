@@ -2,7 +2,7 @@ use color_eyre::Result;
 use ratatui::{
     layout::{Constraint, Layout, Rect},
     style::{Modifier, Style},
-    widgets::Block,
+    widgets::{Block, List, ListItem},
     Frame,
 };
 use tui_tree_widget::{Tree, TreeItem, TreeState};
@@ -60,7 +60,16 @@ impl Tab {
             .fg(self.colors.selected_style_fg);
 
         let items = map_node(&parse_node(
-            self.data.files.iter().map(|f| f.name.as_str()).collect(),
+            self.data
+                .files
+                .iter()
+                .map(|f| {
+                    format!(
+                        "{}\n{}\n{}\n{}\n{}",
+                        f.name, f.downloaded, f.total_size, f.priority, f.wanted
+                    )
+                })
+                .collect(),
         ));
 
         let tree = Tree::new(&items)
@@ -77,7 +86,19 @@ fn map_node(nodes: &[Node]) -> Vec<TreeItem<'static, String>> {
     nodes
         .iter()
         .map(|node| match node {
-            Node::File(name) => TreeItem::new_leaf(name.to_string(), name.to_string()),
+            Node::File(data::Files {
+                name,
+                downloaded,
+                total_size,
+                priority,
+                wanted,
+            }) => TreeItem::new_leaf(
+                name.to_string(),
+                format!(
+                    "{} {} {:>10}  {:>10}  {:>10}",
+                    wanted, name, downloaded, total_size, priority
+                ),
+            ),
             Node::Directory(name, children) => {
                 TreeItem::new(name.to_string(), name.to_string(), map_node(children))
                     .expect("unique identifier")
@@ -88,29 +109,37 @@ fn map_node(nodes: &[Node]) -> Vec<TreeItem<'static, String>> {
 
 #[derive(Debug, Clone)]
 enum Node {
-    File(String),
+    File(data::Files),
     Directory(String, Vec<Node>),
 }
 
-fn parse_node(paths: Vec<&str>) -> Vec<Node> {
+fn parse_node(paths: Vec<String>) -> Vec<Node> {
     let mut nodes: Vec<Node> = Vec::new();
     for path in paths {
-        let parts = path.split('/').collect::<Vec<&str>>();
+        let vecs = path.lines().collect::<Vec<&str>>();
+        let parts = vecs.first().unwrap().split('/').collect::<Vec<&str>>();
+        let data = data::Files {
+            name: parts.last().unwrap().to_string(),
+            downloaded: vecs.get(1).unwrap().parse().unwrap(),
+            total_size: vecs.get(2).unwrap().parse().unwrap(),
+            priority: vecs.get(3).unwrap().to_string(),
+            wanted: vecs.last().unwrap().parse().unwrap(),
+        };
         if !parts.is_empty() {
-            let _ = insert_into_tree(&mut nodes, &parts);
+            let _ = insert_into_tree(&mut nodes, &parts, data);
         }
     }
 
     nodes
 }
 
-fn insert_into_tree(children: &mut Vec<Node>, parts: &[&str]) -> Result<()> {
+fn insert_into_tree(children: &mut Vec<Node>, parts: &[&str], data: data::Files) -> Result<()> {
     let Some((current_part, remaining_parts)) = parts.split_first() else {
         return Ok(());
     };
 
     if remaining_parts.is_empty() {
-        children.push(Node::File((*current_part).to_string()));
+        children.push(Node::File(data));
         return Ok(());
     }
 
@@ -119,14 +148,14 @@ fn insert_into_tree(children: &mut Vec<Node>, parts: &[&str]) -> Result<()> {
         .find(|n| matches!(n, Node::Directory(d_name, _) if d_name == current_part))
     {
         if let Node::Directory(_, children) = existing_dir {
-            let _ = insert_into_tree(children, remaining_parts);
+            let _ = insert_into_tree(children, remaining_parts, data);
         };
         Ok(())
     } else {
         let new_dir = Node::Directory((*current_part).to_string(), Vec::new());
         children.push(new_dir);
         if let Node::Directory(_, children) = children.last_mut().ok_or(app::Error::OutOfBound)? {
-            let _ = insert_into_tree(children, remaining_parts);
+            let _ = insert_into_tree(children, remaining_parts, data);
         };
         Ok(())
     }
