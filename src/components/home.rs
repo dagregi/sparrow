@@ -110,8 +110,8 @@ impl Home {
     async fn remove_torrent(&mut self, with_files: bool) -> types::Result<()> {
         let id = self
             .items
-            .get(self.state.selected().ok_or(AppError::NoRowSelected)?)
-            .ok_or(AppError::OutOfBound)?
+            .get(self.state.selected().ok_or(app::Error::NoRowSelected)?)
+            .ok_or(app::Error::OutOfBound)?
             .id;
         let mut client = self.client.borrow_mut();
         async move { client.torrent_remove(vec![Id::Id(id)], with_files).await }.await?;
@@ -352,7 +352,7 @@ impl Component for Home {
     }
 }
 
-pub async fn close_session(client: &Rc<RefCell<TransClient>>) -> Result<bool, AppError> {
+pub async fn close_session(client: &Rc<RefCell<TransClient>>) -> Result<bool, app::Error> {
     let res = {
         let mut client = client.borrow_mut();
         async move { client.session_close().await }
@@ -361,11 +361,11 @@ pub async fn close_session(client: &Rc<RefCell<TransClient>>) -> Result<bool, Ap
 
     match res {
         Ok(ss) => Ok(ss.is_ok()),
-        Err(err) => Err(AppError::WithMessage(err.to_string())),
+        Err(err) => Err(app::Error::WithMessage(err.to_string())),
     }
 }
 
-fn constraint_len_calculator(items: &[TorrentData]) -> (u16, u16, u16, u16, u16, u16) {
+fn constraint_len_calculator(items: &[data::Torrent]) -> (u16, u16, u16, u16, u16, u16) {
     let name_len = items
         .iter()
         .map(data::Torrent::formatted_name)
