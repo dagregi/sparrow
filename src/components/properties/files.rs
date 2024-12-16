@@ -2,7 +2,7 @@ use color_eyre::Result;
 use ratatui::{
     layout::{Constraint, Layout, Rect},
     style::{Modifier, Style},
-    widgets::{Block, List, ListItem},
+    widgets::Block,
     Frame,
 };
 use tui_tree_widget::{Tree, TreeItem, TreeState};
